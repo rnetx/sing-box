@@ -1,10 +1,10 @@
-//go:build with_embedded_tor && (android || ios)
+//go:build with_embedded_tor && android
 
 package outbound
 
 import (
 	"github.com/cretz/bine/tor"
-	"github.com/ooni/go-libtor"
+	"github.com/ipsn/go-libtor"
 )
 
 func newConfig() tor.StartConf {
