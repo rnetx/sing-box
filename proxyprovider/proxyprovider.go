@@ -218,12 +218,20 @@ func (p *ProxyProvider) getCustomGroupOptions(outbounds *[]option.Outbound) ([]o
 			groupOutOptions.Tag = g.Tag
 			groupOutOptions.Type = C.TypeSelector
 			groupOutOptions.SelectorOptions = g.SelectorOptions
-			groupOutOptions.SelectorOptions.Outbounds = outs
+			if groupOutOptions.SelectorOptions.Outbounds == nil {
+				groupOutOptions.SelectorOptions.Outbounds = outs
+			} else {
+				groupOutOptions.SelectorOptions.Outbounds = append(groupOutOptions.SelectorOptions.Outbounds, outs...)
+			}
 		case C.TypeURLTest:
 			groupOutOptions.Tag = g.Tag
 			groupOutOptions.Type = C.TypeURLTest
 			groupOutOptions.URLTestOptions = g.URLTestOptions
-			groupOutOptions.URLTestOptions.Outbounds = outs
+			if groupOutOptions.URLTestOptions.Outbounds == nil {
+				groupOutOptions.URLTestOptions.Outbounds = outs
+			} else {
+				groupOutOptions.URLTestOptions.Outbounds = append(groupOutOptions.URLTestOptions.Outbounds, outs...)
+			}
 		default:
 			return nil, E.New("unknown group type: ", g.Type)
 		}
