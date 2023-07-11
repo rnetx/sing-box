@@ -274,10 +274,12 @@ func (s *Box) preStart() error {
 	}
 
 	for serviceName, service := range s.preServices {
-		s.logger.Trace("pre-start ", serviceName)
-		err := adapter.PreStart(service)
-		if err != nil {
-			return E.Cause(err, "pre-starting ", serviceName)
+		if preService, isPreService := service.(adapter.PreStarter); isPreService {
+			s.logger.Trace("pre-start ", serviceName)
+			err := preService.PreStart()
+			if err != nil {
+				return E.Cause(err, "pre-starting ", serviceName)
+			}
 		}
 	}
 	err := s.startOutbounds()
@@ -312,14 +314,26 @@ func (s *Box) start() error {
 			return E.Cause(err, "initialize inbound/", in.Type(), "[", tag, "]")
 		}
 	}
+	return nil
+}
+
+func (s *Box) postStart() error {
 	for serviceName, service := range s.postServices {
 		s.logger.Trace("starting ", service)
-		err = service.Start()
+		err := service.Start()
 		if err != nil {
 			return E.Cause(err, "start ", serviceName)
 		}
 	}
-
+	for serviceName, service := range s.outbounds {
+		if lateService, isLateService := service.(adapter.PostStarter); isLateService {
+			s.logger.Trace("post-starting ", service)
+			err := lateService.PostStart()
+			if err != nil {
+				return E.Cause(err, "post-start ", serviceName)
+			}
+		}
+	}
 	for _, service := range s.scripts {
 		if service.GetMode() == "start-post" {
 			s.logger.Trace("run script", "[", service.GetTag(), "]")
@@ -336,7 +350,6 @@ func (s *Box) start() error {
 			}
 		}
 	}
-
 	return nil
 }
 
