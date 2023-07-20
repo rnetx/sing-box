@@ -228,18 +228,10 @@ func (m *multiAddr) getAddr(destination M.Socksaddr) M.Socksaddr {
 		port = uint16(r.Intn(int(m.endPort-m.startPort)+1) + int(m.startPort))
 	}
 	if m.prefix != nil {
-		if m.prefix.Addr().Is4() {
-			destination.Addr = randomAddrFromPrefix4(*m.prefix)
-		} else {
-			destination.Addr = randomAddrFromPrefix6(*m.prefix)
-		}
+		destination.Addr = randomAddrFromPrefix(*m.prefix)
 	}
 	if m.startIP != nil && m.endIP != nil {
-		if m.startIP.Is4() {
-			destination.Addr = randomAddrFromRange4(*m.startIP, *m.endIP)
-		} else {
-			destination.Addr = randomAddrFromRange6(*m.startIP, *m.endIP)
-		}
+		destination.Addr = randomAddrFromRange(*m.startIP, *m.endIP)
 	}
 	if m.ip != nil {
 		destination.Addr = *m.ip
@@ -255,9 +247,15 @@ func random() *rand.Rand {
 	return rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
-func randomAddrFromPrefix4(prefix netip.Prefix) netip.Addr {
+func randomAddrFromPrefix(prefix netip.Prefix) netip.Addr {
 	startN := big.NewInt(0).SetBytes(prefix.Addr().AsSlice())
-	bt := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(1<<5-int64(prefix.Bits())), nil)
+	var bits int
+	if prefix.Addr().Is4() {
+		bits = 5
+	} else {
+		bits = 7
+	}
+	bt := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(1<<bits-int64(prefix.Bits())), nil)
 	bt.Sub(bt, big.NewInt(2))
 	n := big.NewInt(0).Rand(random(), bt)
 	n.Add(n, startN)
@@ -265,26 +263,7 @@ func randomAddrFromPrefix4(prefix netip.Prefix) netip.Addr {
 	return newAddr
 }
 
-func randomAddrFromPrefix6(prefix netip.Prefix) netip.Addr {
-	startN := big.NewInt(0).SetBytes(prefix.Addr().AsSlice())
-	bt := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(1<<7-int64(prefix.Bits())), nil)
-	n := big.NewInt(0).Rand(random(), bt)
-	n.Add(n, startN)
-	newAddr, _ := netip.AddrFromSlice(n.Bytes())
-	return newAddr
-}
-
-func randomAddrFromRange4(start, end netip.Addr) netip.Addr {
-	startN := big.NewInt(0).SetBytes(start.AsSlice())
-	endN := big.NewInt(0).SetBytes(end.AsSlice())
-	bt := big.NewInt(0).Sub(endN, startN)
-	n := big.NewInt(0).Rand(random(), bt)
-	n.Add(n, startN)
-	newAddr, _ := netip.AddrFromSlice(n.Bytes())
-	return newAddr
-}
-
-func randomAddrFromRange6(start, end netip.Addr) netip.Addr {
+func randomAddrFromRange(start, end netip.Addr) netip.Addr {
 	startN := big.NewInt(0).SetBytes(start.AsSlice())
 	endN := big.NewInt(0).SetBytes(end.AsSlice())
 	bt := big.NewInt(0).Sub(endN, startN)
