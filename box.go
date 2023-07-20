@@ -314,6 +314,24 @@ func (s *Box) start() error {
 			return E.Cause(err, "initialize inbound/", in.Type(), "[", tag, "]")
 		}
 	}
+
+	for _, service := range s.scripts {
+		if service.GetMode() == constant.StartPost {
+			s.logger.Trace("run script", "[", service.GetTag(), "]")
+			if service.GetKeep() {
+				err := service.Start()
+				if err != nil {
+					return E.Cause(err, "run script", "[", service.GetTag(), "]")
+				}
+				continue
+			}
+			err := service.RunWithGlobalContext()
+			if err != nil {
+				return E.Cause(err, "run script", "[", service.GetTag(), "]")
+			}
+		}
+	}
+
 	return nil
 }
 
