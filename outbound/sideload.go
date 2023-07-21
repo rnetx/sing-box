@@ -82,7 +82,9 @@ func (s *SideLoad) Start() error {
 
 func (s *SideLoad) Close() error {
 	s.isClose.Store(true)
-	s.runCancel()
+	if s.runCancel != nil {
+		s.runCancel()
+	}
 	waitTicker := time.NewTicker(10 * time.Millisecond)
 	defer waitTicker.Stop()
 	for {
