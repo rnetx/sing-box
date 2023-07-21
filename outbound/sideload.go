@@ -26,13 +26,17 @@ var _ adapter.Outbound = (*SideLoad)(nil)
 
 type SideLoad struct {
 	myOutboundAdapter
-	ctx             context.Context
-	dialer          N.Dialer
-	socksClient     *socks.Client
-	dialerForwarder *D.DialerForwarder
-	options         option.SideLoadOutboundOptions
-	command         atomic.Pointer[exec.Cmd]
-	isClose         atomic.Bool
+	ctx                 context.Context
+	dialer              N.Dialer
+	socksClient         *socks.Client
+	dialerForwarder     *D.DialerForwarder
+	options             option.SideLoadOutboundOptions
+	runCtx              context.Context
+	runCancel           context.CancelFunc
+	command             atomic.Pointer[exec.Cmd]
+	commandStdoutWriter *sideLoadLogWriter
+	commandStderrWriter *sideLoadLogWriter
+	isClose             atomic.Bool
 }
 
 func NewSideLoad(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SideLoadOutboundOptions) (*SideLoad, error) {
@@ -58,25 +62,19 @@ func NewSideLoad(ctx context.Context, router adapter.Router, logger log.ContextL
 	}
 	serverSocksAddr := M.ParseSocksaddrHostPort("127.0.0.1", options.Socks5ProxyPort)
 	outbound.socksClient = socks.NewClient(N.SystemDialer, serverSocksAddr, socks.Version5, "", "")
-	command := exec.CommandContext(ctx, options.Command[0], options.Command[1:]...)
-	command.Env = options.Env
-	outbound.command.Store(command)
 	outbound.options = options
+	outbound.commandStdoutWriter = newSideLoadLogWriter(logger.Info)
+	outbound.commandStderrWriter = newSideLoadLogWriter(logger.Info)
 	return outbound, nil
 }
 
 func (s *SideLoad) Start() error {
+	s.runCtx, s.runCancel = context.WithCancel(s.ctx)
 	if s.dialerForwarder != nil {
 		err := s.dialerForwarder.Start()
 		if err != nil {
 			return err
 		}
-	}
-	s.command.Load().Stdout = newSideLoadLogWriter(s.logger.Info)
-	s.command.Load().Stderr = newSideLoadLogWriter(s.logger.Info)
-	err := s.command.Load().Start()
-	if err != nil {
-		return err
 	}
 	go s.keepCommand()
 	return nil
@@ -84,12 +82,20 @@ func (s *SideLoad) Start() error {
 
 func (s *SideLoad) Close() error {
 	s.isClose.Store(true)
-	err := s.command.Load().Process.Kill()
-	if err != nil {
-		return err
+	s.runCancel()
+	waitTicker := time.NewTicker(10 * time.Millisecond)
+	defer waitTicker.Stop()
+	for {
+		select {
+		case <-waitTicker.C:
+			if s.command.Load() != nil {
+				continue
+			}
+		}
+		break
 	}
 	if s.dialerForwarder != nil {
-		err = s.dialerForwarder.Close()
+		err := s.dialerForwarder.Close()
 		if err != nil {
 			return err
 		}
@@ -98,41 +104,50 @@ func (s *SideLoad) Close() error {
 }
 
 func (s *SideLoad) keepCommand() {
+	defer func() {
+		command := s.command.Swap(nil)
+		if command != nil {
+			command.Process.Kill()
+		}
+	}()
 	for {
-		waitCtx, waitCancel := context.WithCancel(s.ctx)
-		go func() {
-			defer waitCancel()
-			s.command.Load().Wait()
-		}()
+		waitCtx, waitCancel := context.WithCancel(s.runCtx)
+		for {
+			select {
+			case <-time.After(3 * time.Second):
+				oldCommand := s.command.Swap(nil)
+				if oldCommand != nil {
+					oldCommand.Process.Kill()
+				}
+				command := exec.CommandContext(s.runCtx, s.options.Command[0], s.options.Command[1:]...)
+				command.Env = s.options.Env
+				command.Stdout = s.commandStdoutWriter
+				command.Stderr = s.commandStderrWriter
+				command.Cancel = func() error {
+					waitCancel()
+					s.logger.Warn("command cancel")
+					return command.Process.Kill()
+				}
+				err := command.Start()
+				if err != nil {
+					command.Process.Kill()
+					s.logger.Error("restart command error: ", err, ", retry")
+					continue
+				}
+				s.command.Store(command)
+				s.logger.Info("restart command success")
+			case <-s.ctx.Done():
+				waitCancel()
+				return
+			}
+			break
+		}
 		select {
 		case <-waitCtx.Done():
-			if command := s.command.Load(); command != nil && command.ProcessState != nil && command.ProcessState.Exited() {
-				if s.isClose.Load() {
-					return
-				}
-				s.logger.Error("command stop, restart...")
-				var newCommand *exec.Cmd
-				for {
-					select {
-					case <-time.After(3 * time.Second):
-						newCommand = exec.CommandContext(s.ctx, s.options.Command[0], s.options.Command[1:]...)
-						newCommand.Env = s.options.Env
-						newCommand.Stdout = newSideLoadLogWriter(s.logger.Info)
-						newCommand.Stderr = newSideLoadLogWriter(s.logger.Info)
-						err := newCommand.Start()
-						if err != nil {
-							newCommand.Process.Kill()
-							s.logger.Error("restart command error: ", err, ", retry")
-							continue
-						}
-					case <-s.ctx.Done():
-						return
-					}
-					break
-				}
-				s.command.Store(newCommand)
-				s.logger.Info("restart command success")
+			if s.isClose.Load() {
+				return
 			}
+			s.logger.Error("command stop, restart...")
 		case <-s.ctx.Done():
 			return
 		}
