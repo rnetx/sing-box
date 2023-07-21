@@ -18,7 +18,6 @@ type _Options struct {
 	Route          *RouteOptions                  `json:"route,omitempty"`
 	Experimental   *ExperimentalOptions           `json:"experimental,omitempty"`
 	ProxyProviders Listable[ProxyProviderOptions] `json:"proxyproviders,omitempty"`
-	Script         Listable[ScriptOptions]        `json:"script,omitempty"`
 }
 
 type Options _Options

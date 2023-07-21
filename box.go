@@ -17,7 +17,6 @@ import (
 	"github.com/sagernet/sing-box/outbound"
 	"github.com/sagernet/sing-box/proxyprovider"
 	"github.com/sagernet/sing-box/route"
-	"github.com/sagernet/sing-box/script"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
@@ -34,7 +33,6 @@ type Box struct {
 	logger       log.ContextLogger
 	preServices  map[string]adapter.Service
 	postServices map[string]adapter.Service
-	scripts      []*script.ScriptService
 	done         chan struct{}
 }
 
@@ -188,22 +186,6 @@ func New(options Options) (*Box, error) {
 		preServices["v2ray api"] = v2rayServer
 	}
 
-	var scripts []*script.ScriptService
-
-	if options.Script != nil && len(options.Script) > 0 {
-		scripts = make([]*script.ScriptService, 0)
-		for i, s := range options.Script {
-			var tag string
-			if s.Tag != "" {
-				tag = s.Tag
-			} else {
-				tag = F.ToString(i)
-			}
-			service := script.NewScript(ctx, logFactory.NewLogger(F.ToString("script", "[", tag, "]")), s)
-			scripts = append(scripts, service)
-		}
-	}
-
 	return &Box{
 		router:       router,
 		inbounds:     inbounds,
@@ -213,7 +195,6 @@ func New(options Options) (*Box, error) {
 		logger:       logger,
 		preServices:  preServices,
 		postServices: postServices,
-		scripts:      scripts,
 		done:         make(chan struct{}),
 	}, nil
 }
@@ -257,22 +238,6 @@ func (s *Box) Start() error {
 }
 
 func (s *Box) preStart() error {
-	for _, service := range s.scripts {
-		if service.GetMode() == "start-pre" {
-			if service.GetKeep() {
-				err := service.Start()
-				if err != nil {
-					return E.Cause(err, "run script", "[", service.GetTag(), "]")
-				}
-				continue
-			}
-			err := service.RunWithGlobalContext()
-			if err != nil {
-				return E.Cause(err, "run script", "[", service.GetTag(), "]")
-			}
-		}
-	}
-
 	for serviceName, service := range s.preServices {
 		if preService, isPreService := service.(adapter.PreStarter); isPreService {
 			s.logger.Trace("pre-start ", serviceName)
@@ -315,23 +280,6 @@ func (s *Box) start() error {
 		}
 	}
 
-	for _, service := range s.scripts {
-		if service.GetMode() == constant.StartPost {
-			s.logger.Trace("run script", "[", service.GetTag(), "]")
-			if service.GetKeep() {
-				err := service.Start()
-				if err != nil {
-					return E.Cause(err, "run script", "[", service.GetTag(), "]")
-				}
-				continue
-			}
-			err := service.RunWithGlobalContext()
-			if err != nil {
-				return E.Cause(err, "run script", "[", service.GetTag(), "]")
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -352,22 +300,6 @@ func (s *Box) postStart() error {
 			}
 		}
 	}
-	for _, service := range s.scripts {
-		if service.GetMode() == "start-post" {
-			s.logger.Trace("run script", "[", service.GetTag(), "]")
-			if service.GetKeep() {
-				err := service.Start()
-				if err != nil {
-					return E.Cause(err, "run script", "[", service.GetTag(), "]")
-				}
-				continue
-			}
-			err := service.RunWithGlobalContext()
-			if err != nil {
-				return E.Cause(err, "run script", "[", service.GetTag(), "]")
-			}
-		}
-	}
 	return nil
 }
 
@@ -379,23 +311,6 @@ func (s *Box) Close() error {
 		close(s.done)
 	}
 	var errors error
-
-	for _, service := range s.scripts {
-		if service.GetMode() == "close-pre" {
-			if service.GetKeep() {
-				errors = E.Append(errors, service.Close(), func(err error) error {
-					return E.Cause(err, "stop script", "[", service.GetTag(), "]")
-				})
-				continue
-			}
-			err := service.RunWithGlobalContext()
-			if err != nil {
-				errors = E.Append(errors, err, func(err error) error {
-					return E.Cause(err, "run script", "[", service.GetTag(), "]")
-				})
-			}
-		}
-	}
 
 	for serviceName, service := range s.postServices {
 		s.logger.Trace("closing ", serviceName)
@@ -426,23 +341,6 @@ func (s *Box) Close() error {
 		errors = E.Append(errors, service.Close(), func(err error) error {
 			return E.Cause(err, "close ", serviceName)
 		})
-	}
-
-	for _, service := range s.scripts {
-		if service.GetMode() == "close-post" {
-			if service.GetKeep() {
-				errors = E.Append(errors, service.Close(), func(err error) error {
-					return E.Cause(err, "stop script", "[", service.GetTag(), "]")
-				})
-				continue
-			}
-			err := service.RunWithContext(context.Background())
-			if err != nil {
-				errors = E.Append(errors, err, func(err error) error {
-					return E.Cause(err, "run script", "[", service.GetTag(), "]")
-				})
-			}
-		}
 	}
 
 	s.logger.Trace("closing log factory")
