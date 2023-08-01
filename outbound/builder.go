@@ -55,6 +55,8 @@ func New(ctx context.Context, router adapter.Router, logger log.ContextLogger, t
 		return NewSideLoad(ctx, router, logger, tag, options.SideLoadOptions)
 	case C.TypeMultiAddr:
 		return NewMultiAddr(ctx, router, logger, tag, options.MultiAddrOptions)
+	case C.TypeTUIC:
+		return NewTUIC(ctx, router, logger, tag, options.TUICOptions)
 	case C.TypeSelector:
 		return NewSelector(router, logger, tag, options.SelectorOptions)
 	case C.TypeURLTest:

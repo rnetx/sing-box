@@ -23,6 +23,7 @@ const (
 	TypeVLESS        = "vless"
 	TypeSideLoad     = "sideload"
 	TypeMultiAddr    = "multiaddr"
+	TypeTUIC         = "tuic"
 )
 
 const (

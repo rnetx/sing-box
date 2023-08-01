@@ -25,6 +25,7 @@ type _Outbound struct {
 	VLESSOptions        VLESSOutboundOptions        `json:"-"`
 	SideLoadOptions     SideLoadOutboundOptions     `json:"-"`
 	MultiAddrOptions    MultiAddrOutboundOptions    `json:"-"`
+	TUICOptions         TUICOutboundOptions         `json:"-"`
 	SelectorOptions     SelectorOutboundOptions     `json:"-"`
 	URLTestOptions      URLTestOutboundOptions      `json:"-"`
 }
@@ -66,6 +67,8 @@ func (h Outbound) MarshalJSON() ([]byte, error) {
 		v = h.SideLoadOptions
 	case C.TypeMultiAddr:
 		v = h.MultiAddrOptions
+	case C.TypeTUIC:
+		v = h.TUICOptions
 	case C.TypeSelector:
 		v = h.SelectorOptions
 	case C.TypeURLTest:
@@ -115,6 +118,8 @@ func (h *Outbound) UnmarshalJSON(bytes []byte) error {
 		v = &h.SideLoadOptions
 	case C.TypeMultiAddr:
 		v = &h.MultiAddrOptions
+	case C.TypeTUIC:
+		v = &h.TUICOptions
 	case C.TypeSelector:
 		v = &h.SelectorOptions
 	case C.TypeURLTest:
