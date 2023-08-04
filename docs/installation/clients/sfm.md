@@ -11,6 +11,7 @@ Experimental macOS client for sing-box.
 
 * [AppStore](https://apps.apple.com/us/app/sing-box/id6451272673)
 * [TestFlight](https://testflight.apple.com/join/AcqO44FH)
+* [TestFlight (Unstable)](https://testflight.apple.com/join/Aqw9v5D3)
 
 #### Download (Independent Version)
 
