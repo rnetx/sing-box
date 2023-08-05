@@ -67,6 +67,10 @@ func ProxyDisplayName(proxyType string) string {
 		return "VLESS"
 	case TypeTUIC:
 		return "TUIC"
+	case TypeSideLoad:
+		return "SideLoad"
+	case TypeMultiAddr:
+		return "MultiAddr"
 	case TypeSelector:
 		return "Selector"
 	case TypeURLTest:
