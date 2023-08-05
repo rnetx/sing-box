@@ -71,7 +71,7 @@ func showProxyProvider() int {
 	m := make([]option.Outbound, 0)
 
 	for _, pp := range needShowProxyProviders {
-		err := pp.Update()
+		err := pp.SubScribeAndParse()
 		if err != nil {
 			log.Error(E.Cause(err, "update proxy provider ", pp.Tag()))
 			continue

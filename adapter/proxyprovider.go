@@ -8,8 +8,8 @@ import (
 
 type ProxyProvider interface {
 	Tag() string
-	Update() error
-	ForceUpdate() error
+	SubScribeAndParse() error
+	ForceSubScribeToCache() error
 	GetOutbounds() ([]Outbound, error)
 	GetOutboundOptions() ([]option.Outbound, error)
 	GetUpdateTime() time.Time

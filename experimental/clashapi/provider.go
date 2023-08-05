@@ -69,13 +69,13 @@ func updateProvider(server *Server) func(w http.ResponseWriter, r *http.Request)
 	return func(w http.ResponseWriter, r *http.Request) {
 		proxyProvider := r.Context().Value(CtxKeyProvider).(adapter.ProxyProvider)
 		go func(server *Server, proxyProvider adapter.ProxyProvider) {
-			server.logger.Info("update provider: ", proxyProvider.Tag())
-			err := proxyProvider.ForceUpdate()
+			server.logger.Info("update proxy provider: ", proxyProvider.Tag())
+			err := proxyProvider.ForceSubScribeToCache()
 			if err != nil {
-				server.logger.Error("update provider: ", proxyProvider.Tag(), " fail: ", err)
+				server.logger.Error("update proxy provider: ", proxyProvider.Tag(), " fail: ", err)
 				return
 			}
-			server.logger.Info("update provider: ", proxyProvider.Tag(), " success")
+			server.logger.Info("update proxy provider: ", proxyProvider.Tag(), " success")
 		}(server, proxyProvider)
 		render.NoContent(w, r)
 	}

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -18,126 +19,70 @@ import (
 
 	"github.com/sagernet/quic-go"
 	"github.com/sagernet/quic-go/http3"
-	"github.com/sagernet/sing-box/proxyprovider/proxy"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
-
-	"gopkg.in/yaml.v3"
 )
 
 const requestTimeout = 10 * time.Second
 
-func (p *ProxyProvider) update() error {
-	cache, cacheTime, cacheErr := p.readCache()
-	if cacheErr == nil {
-		if p.options.ForceUpdate == 0 || time.Since(cacheTime) < time.Duration(p.options.ForceUpdate) {
-			p.subscriptionRawDataLock.Lock()
-			p.subscriptionRawData = *cache
-			p.subscriptionRawDataLock.Unlock()
-			return nil
+func (p *ProxyProvider) SubScribeAndParse() error {
+	var cacheData *SubscriptionData
+	if p.options.CacheFile != "" {
+		var cacheTime time.Time
+		var cacheErr error
+		cacheData, cacheTime, cacheErr = readFromCache(p.options.CacheFile)
+		if cacheErr == nil {
+			if p.options.ForceUpdate == 0 || time.Since(cacheTime) < time.Duration(p.options.ForceUpdate) {
+				p.subscriptionData.Store(cacheData)
+				return nil
+			}
 		}
 	}
-
-	rawData, err := p.request()
+	reqData, err := p.request()
 	if err != nil {
-		if cacheErr == nil {
+		if cacheData != nil {
 			if p.logger != nil {
 				p.logger.Warn("failed to update proxy provider, use cache, err: ", err)
 			}
-			p.subscriptionRawDataLock.Lock()
-			p.subscriptionRawData = *cache
-			p.subscriptionRawDataLock.Unlock()
+			p.subscriptionData.Store(cacheData)
 			return nil
 		}
 		return E.Cause(err, "failed to update proxy provider")
 	}
-
-	p.subscriptionRawDataLock.Lock()
-	p.subscriptionRawData = *rawData
-	p.subscriptionRawDataLock.Unlock()
-
-	err = p.writeCache()
-	if err != nil {
-		return err
+	if p.options.CacheFile != "" {
+		err := writeToCache(p.options.CacheFile, reqData)
+		if err != nil {
+			return err
+		}
 	}
-
+	p.subscriptionData.Store(reqData)
 	return nil
 }
 
-func (p *ProxyProvider) Update() error {
+func (p *ProxyProvider) ForceSubScribeToCache() error {
+	if p.options.CacheFile == "" {
+		return E.New("no cache file found")
+	}
 	if !p.updateLock.TryLock() {
-		return nil
+		return E.New("updating...")
 	}
 	defer p.updateLock.Unlock()
-
-	err := p.update()
-	if err != nil {
-		return err
-	}
-
-	return p.parseToPeerList()
-}
-
-func (p *ProxyProvider) ForceUpdate() error {
-	if !p.updateLock.TryLock() {
-		return nil
-	}
-	defer p.updateLock.Unlock()
-
-	rawData, err := p.request()
+	reqData, err := p.request()
 	if err != nil {
 		return E.Cause(err, "failed to update proxy provider")
 	}
-
-	p.subscriptionRawDataLock.Lock()
-	p.subscriptionRawData = *rawData
-	p.subscriptionRawDataLock.Unlock()
-
-	err = p.writeCache()
+	err = writeToCache(p.options.CacheFile, reqData)
 	if err != nil {
 		return err
 	}
-
-	return p.parseToPeerList()
-}
-
-func (p *ProxyProvider) parseToPeerList() error {
-	var clashConfig proxy.ClashConfig
-	p.subscriptionRawDataLock.RLock()
-	PeerInfo := p.subscriptionRawData.PeerInfo
-	p.subscriptionRawDataLock.RUnlock()
-	err := yaml.Unmarshal(PeerInfo, &clashConfig)
-	if err != nil {
-		return E.Cause(err, "failed to parse proxy")
-	}
-	if clashConfig.Proxies == nil || len(clashConfig.Proxies) == 0 {
-		return E.New("proxy not found")
-	}
-
-	proxies := make([]proxy.Proxy, 0)
-	for _, proxyConfig := range clashConfig.Proxies {
-		px, err := proxyConfig.ToProxy()
-		if err != nil {
-			return E.Cause(err, "failed to parse proxy")
-		}
-		if !CheckFilter(p.options.Filter, px.Tag(), px.Type()) {
-			continue
-		}
-		if p.options.DialerOptions != nil {
-			px.SetDialerOptions(*p.options.DialerOptions)
-		}
-		proxies = append(proxies, px)
-	}
-
-	p.peerList = proxies
-
+	p.subscriptionData.Store(reqData)
 	return nil
 }
 
-func (p *ProxyProvider) readCache() (*subscriptionRawData, time.Time, error) {
-	file, err := os.Open(p.options.CacheFile)
+func readFromCache(cacheFile string) (*SubscriptionData, time.Time, error) {
+	file, err := os.Open(cacheFile)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
@@ -155,30 +100,31 @@ func (p *ProxyProvider) readCache() (*subscriptionRawData, time.Time, error) {
 	if n == 0 {
 		return nil, time.Time{}, E.New("cache file is empty")
 	}
-	var s subscriptionRawData
+	var s SubscriptionData
 	err = s.decode(data)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	err = s.parse()
 	if err != nil {
 		return nil, time.Time{}, err
 	}
 	return &s, fileInfo.ModTime(), nil
 }
 
-func (p *ProxyProvider) writeCache() error {
-	if p.options.CacheFile != "" {
-		p.subscriptionRawDataLock.RLock()
-		subscriptionRawData := p.subscriptionRawData
-		p.subscriptionRawDataLock.RUnlock()
-		data, err := subscriptionRawData.encode()
+func writeToCache(cacheFile string, subscriptionData *SubscriptionData) error {
+	if cacheFile != "" {
+		data, err := subscriptionData.encode()
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(p.options.CacheFile, data, 0o644)
+		return os.WriteFile(cacheFile, data, 0o644)
 	}
 
 	return nil
 }
 
-func (p *ProxyProvider) request() (*subscriptionRawData, error) {
+func (p *ProxyProvider) request() (*SubscriptionData, error) {
 	req, err := http.NewRequest(http.MethodGet, p.options.URL, nil)
 	if err != nil {
 		return nil, E.Cause(err, "failed to create http request")
@@ -188,7 +134,7 @@ func (p *ProxyProvider) request() (*subscriptionRawData, error) {
 	if err != nil {
 		return nil, E.Cause(err, "failed to request")
 	}
-	s := &subscriptionRawData{
+	s := &SubscriptionData{
 		PeerInfo: data,
 	}
 	s.UpdateTime = time.Now()
@@ -220,7 +166,10 @@ func (p *ProxyProvider) request() (*subscriptionRawData, error) {
 			}
 		}
 	}
-
+	err = s.parse()
+	if err != nil {
+		return nil, E.Cause(err, "failed to parse subscription data")
+	}
 	return s, nil
 }
 
@@ -302,6 +251,9 @@ func (p *ProxyProvider) httpRequest(req *http.Request) (http.Header, []byte, err
 	resp, err := client.Do(reqWithCtx)
 	if err != nil {
 		return nil, nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil, fmt.Errorf("http status code: %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 	buf := &bytes.Buffer{}

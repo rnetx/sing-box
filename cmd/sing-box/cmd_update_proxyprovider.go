@@ -66,9 +66,9 @@ func updateProxyProvider() int {
 	}
 
 	for _, pp := range needUpdateProxyProviders {
-		err := pp.ForceUpdate()
+		err := pp.ForceSubScribeToCache()
 		if err != nil {
-			log.Error(E.Cause(err, "update proxy provider ", pp.Tag()))
+			log.Error(E.Cause(err, "subscribe and cache proxy provider ", pp.Tag()))
 			continue
 		}
 		log.Info("Proxy Provider ", pp.Tag(), " updated")

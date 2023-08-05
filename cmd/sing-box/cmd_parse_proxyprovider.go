@@ -46,7 +46,7 @@ func parseProxyProvider() int {
 		return 1
 	}
 
-	err = pp.Update()
+	err = pp.ForceSubScribeToCache()
 	if err != nil {
 		log.Fatal(E.Cause(err, "update proxy provider"))
 		return 1

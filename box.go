@@ -138,9 +138,9 @@ func New(options Options) (*Box, error) {
 				return nil, E.Cause(err, "parse proxy provider[", i, "]")
 			}
 			logger.Info("init proxy provider[", i, "]")
-			err = pp.Update()
+			err = pp.SubScribeAndParse()
 			if err != nil {
-				return nil, E.Cause(err, "update proxy provider[", i, "]")
+				return nil, E.Cause(err, "subscribe proxy provider[", i, "]")
 			}
 			outs, err := pp.GetOutbounds()
 			if err != nil {

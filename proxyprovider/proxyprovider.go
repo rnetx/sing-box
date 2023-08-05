@@ -12,6 +12,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/outbound"
+	"github.com/sagernet/sing-box/proxyprovider/proxy"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 )
@@ -49,12 +50,31 @@ func (p *ProxyProvider) Tag() string {
 }
 
 func (p *ProxyProvider) GetOutboundOptions() ([]option.Outbound, error) {
-	if p.peerList == nil {
-		return nil, E.New("proxy list is empty")
+	peerList := p.peerList.Load()
+	if peerList == nil {
+		subscriptionData := p.subscriptionData.Load()
+		if subscriptionData == nil {
+			return nil, E.New("subscription data is nil")
+		}
+		peerList = new([]proxy.Proxy)
+		*peerList = make([]proxy.Proxy, 0)
+		for _, proxyConfig := range subscriptionData.PeerList {
+			px, err := proxyConfig.ToProxy()
+			if err != nil {
+				return nil, E.Cause(err, "failed to parse proxy")
+			}
+			if !CheckFilter(p.options.Filter, px.Tag(), px.Type()) {
+				continue
+			}
+			if p.options.DialerOptions != nil {
+				px.SetDialerOptions(*p.options.DialerOptions)
+			}
+			*peerList = append(*peerList, px)
+		}
 	}
 
 	outbounds := make([]option.Outbound, 0)
-	for i, px := range p.peerList {
+	for i, px := range *peerList {
 		outboundOptions, err := px.GenerateOptions()
 		if err != nil {
 			continue
@@ -72,7 +92,7 @@ func (p *ProxyProvider) GetOutboundOptions() ([]option.Outbound, error) {
 
 	groupOutbounds, err := p.getCustomGroupOptions(&outbounds)
 	if err != nil {
-		return nil, E.Cause(err, "parse proxyprovider[", p.Tag(), "] custom group")
+		return nil, E.Cause(err, "parse custom group")
 	}
 	if groupOutbounds != nil {
 		outbounds = append(outbounds, groupOutbounds...)
@@ -128,19 +148,15 @@ func (p *ProxyProvider) GetOutboundOptions() ([]option.Outbound, error) {
 }
 
 func (p *ProxyProvider) GetOutbounds() ([]adapter.Outbound, error) {
-	if p.peerList == nil {
-		return nil, E.New("proxy list is empty")
-	}
-
 	outboundOptions, err := p.GetOutboundOptions()
 	if err != nil {
-		return nil, E.Cause(err, "generate proxyprovider[", p.Tag(), "] options")
+		return nil, E.Cause(err, "generate outbound options")
 	}
 	outbounds := make([]adapter.Outbound, 0)
 	for _, outOptions := range outboundOptions {
 		out, err := outbound.New(p.ctx, p.router, p.logFactory.NewLogger(F.ToString("outbound/", outOptions.Type, "[", outOptions.Tag, "]")), outOptions.Tag, outOptions)
 		if err != nil {
-			return nil, E.Cause(err, "create proxyprovider[", p.Tag(), "] outbound[", outOptions.Tag, "]")
+			return nil, E.Cause(err, "parse outbound/", outOptions.Type, "[", outOptions.Tag, "]")
 		}
 		outbounds = append(outbounds, out)
 	}
@@ -249,13 +265,17 @@ func (p *ProxyProvider) getCustomGroupOptions(outbounds *[]option.Outbound) ([]o
 }
 
 func (p *ProxyProvider) GetUpdateTime() time.Time {
-	p.subscriptionRawDataLock.RLock()
-	defer p.subscriptionRawDataLock.RUnlock()
-	return p.subscriptionRawData.UpdateTime
+	subscriptionData := p.subscriptionData.Load()
+	if subscriptionData == nil {
+		return time.Time{}
+	}
+	return subscriptionData.UpdateTime
 }
 
 func (p *ProxyProvider) GetSubscribeInfo() adapter.SubScribeInfo {
-	p.subscriptionRawDataLock.RLock()
-	defer p.subscriptionRawDataLock.RUnlock()
-	return &p.subscriptionRawData.SubScribeInfo
+	subscriptionData := p.subscriptionData.Load()
+	if subscriptionData == nil {
+		return nil
+	}
+	return &subscriptionData.SubscriptionInfo
 }

@@ -22,7 +22,7 @@ func (p *ProxyProvider) Tag() string {
 	return ""
 }
 
-func (p *ProxyProvider) Update() error {
+func (p *ProxyProvider) SubScribeAndParse() error {
 	return E.New(`ProxyProvider is not included in this build, rebuild with -tags with_proxyprovider`)
 }
 
@@ -38,7 +38,7 @@ func (p *ProxyProvider) GetSubscribeInfo() adapter.SubScribeInfo {
 	return nil
 }
 
-func (p *ProxyProvider) ForceUpdate() error {
+func (p *ProxyProvider) ForceSubScribeToCache() error {
 	return E.New(`ProxyProvider is not included in this build, rebuild with -tags with_proxyprovider`)
 }
 
