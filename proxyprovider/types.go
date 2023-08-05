@@ -23,6 +23,7 @@ type ProxyProvider struct {
 	ctx        context.Context
 	router     adapter.Router
 	logFactory log.Factory
+	logger     log.Logger
 	options    option.ProxyProviderOptions
 	//
 	dialer       N.Dialer

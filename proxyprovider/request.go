@@ -43,6 +43,12 @@ func (p *ProxyProvider) update() error {
 	rawData, err := p.request()
 	if err != nil {
 		if cacheErr == nil {
+			if p.logger != nil {
+				p.logger.Warn("failed to update proxy provider, use cache, err: ", err)
+			}
+			p.subscriptionRawDataLock.Lock()
+			p.subscriptionRawData = *cache
+			p.subscriptionRawDataLock.Unlock()
 			return nil
 		}
 		return E.Cause(err, "failed to update proxy provider")
