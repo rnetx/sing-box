@@ -5,8 +5,8 @@ package proxyprovider
 import (
 	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,11 +41,11 @@ type ProxyProvider struct {
 }
 
 type SubscriptionInfo struct {
-	Upload     uint64
-	Download   uint64
-	Total      uint64
-	Expire     time.Time
-	UpdateTime time.Time
+	Upload     uint64    `json:"upload"`
+	Download   uint64    `json:"download"`
+	Total      uint64    `json:"total"`
+	Expire     time.Time `json:"expire"`
+	UpdateTime time.Time `json:"update_time"`
 }
 
 func (s *SubscriptionInfo) GetUpload() uint64 {
@@ -71,17 +71,18 @@ type SubscriptionData struct {
 }
 
 type _SubscriptionData struct {
-	PeerInfo []byte
+	PeerInfo string `json:"peer_info" yaml:"peer_info"`
 	SubscriptionInfo
 }
 
 func (s *SubscriptionData) encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
+	peerInfo := hex.EncodeToString(s.PeerInfo)
 	_s := _SubscriptionData{
-		PeerInfo:         s.PeerInfo,
+		PeerInfo:         peerInfo,
 		SubscriptionInfo: s.SubscriptionInfo,
 	}
-	err := gob.NewEncoder(buf).Encode(_s)
+	err := json.NewEncoder(buf).Encode(_s)
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +99,16 @@ func (s *SubscriptionData) decode(data []byte) error {
 		return err
 	}
 	var _s _SubscriptionData
-	err = gob.NewDecoder(bytes.NewReader(hexDecData)).Decode(&_s)
+	err = json.NewDecoder(bytes.NewReader(hexDecData)).Decode(&_s)
+	if err != nil {
+		return err
+	}
+	peerInfo, err := hex.DecodeString(_s.PeerInfo)
 	if err != nil {
 		return err
 	}
 	*s = SubscriptionData{
-		PeerInfo:         _s.PeerInfo,
+		PeerInfo:         peerInfo,
 		SubscriptionInfo: _s.SubscriptionInfo,
 	}
 	return nil

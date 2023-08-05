@@ -225,6 +225,9 @@ func (p *ProxyProvider) httpRequest(req *http.Request) (http.Header, []byte, err
 		reqWithCtx = reqWithCtx.WithContext(reqCtx)
 		resp, err := h3Client.Do(reqWithCtx)
 		if err == nil {
+			if resp.StatusCode != http.StatusOK {
+				return nil, nil, fmt.Errorf("http status code: %d", resp.StatusCode)
+			}
 			defer resp.Body.Close()
 			buf := &bytes.Buffer{}
 			_, err = io.Copy(buf, resp.Body)
