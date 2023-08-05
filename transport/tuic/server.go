@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"io"
 	"net"
 	"runtime"
@@ -191,7 +192,6 @@ type serverSession struct {
 	authUser   *User
 	udpAccess  sync.RWMutex
 	udpConnMap map[uint16]*udpPacketConn
-	defragger  defragger
 }
 
 func (s *serverSession) handle() {
@@ -275,12 +275,36 @@ func (s *serverSession) handleUniStream(stream quic.ReceiveStream) error {
 		case <-s.authDone:
 		}
 		message := udpMessagePool.Get().(*udpMessage)
-		err = decodeUDPMessage(message, io.MultiReader(bytes.NewReader(buffer.From(2)), stream))
+		err = readUDPMessage(message, io.MultiReader(bytes.NewReader(buffer.From(2)), stream))
 		if err != nil {
 			message.release()
 			return err
 		}
 		s.handleUDPMessage(message, true)
+		return nil
+	case CommandDissociate:
+		select {
+		case <-s.connDone:
+			return s.connErr
+		case <-s.authDone:
+		}
+		if buffer.Len() > 4 {
+			return E.New("invalid dissociate message")
+		}
+		var sessionID uint16
+		err = binary.Read(io.MultiReader(bytes.NewReader(buffer.From(2)), stream), binary.BigEndian, &sessionID)
+		if err != nil {
+			return err
+		}
+		s.udpAccess.RLock()
+		udpConn, loaded := s.udpConnMap[sessionID]
+		s.udpAccess.RUnlock()
+		if loaded {
+			udpConn.closeWithError(E.New("remote closed"))
+			s.udpAccess.Lock()
+			delete(s.udpConnMap, sessionID)
+			s.udpAccess.Unlock()
+		}
 		return nil
 	default:
 		return E.New("unknown command ", command)
@@ -326,7 +350,7 @@ func (s *serverSession) handleStream(stream quic.Stream) error {
 	if command != CommandConnect {
 		return E.New("unsupported stream command ", command)
 	}
-	destination, err := M.SocksaddrSerializer.ReadAddrPort(io.MultiReader(buffer, stream))
+	destination, err := addressSerializer.ReadAddrPort(io.MultiReader(buffer, stream))
 	if err != nil {
 		return E.Cause(err, "read request destination")
 	}

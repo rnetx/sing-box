@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/sleep"
 	"github.com/sagernet/sing-box/common/urltest"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
@@ -155,15 +156,16 @@ func (s *URLTest) InterfaceUpdated() error {
 }
 
 type URLTestGroup struct {
-	ctx       context.Context
-	router    adapter.Router
-	logger    log.Logger
-	outbounds []adapter.Outbound
-	link      string
-	interval  time.Duration
-	tolerance uint16
-	history   *urltest.HistoryStorage
-	checking  atomic.Bool
+	ctx          context.Context
+	router       adapter.Router
+	logger       log.Logger
+	outbounds    []adapter.Outbound
+	link         string
+	interval     time.Duration
+	tolerance    uint16
+	history      *urltest.HistoryStorage
+	checking     atomic.Bool
+	sleepManager *sleep.Manager
 
 	fallback URLTestFallback
 
@@ -187,16 +189,17 @@ func NewURLTestGroup(ctx context.Context, router adapter.Router, logger log.Logg
 		history = urltest.NewHistoryStorage()
 	}
 	return &URLTestGroup{
-		ctx:       ctx,
-		router:    router,
-		logger:    logger,
-		outbounds: outbounds,
-		link:      link,
-		interval:  interval,
-		tolerance: tolerance,
-		history:   history,
-		fallback:  fallback,
-		close:     make(chan struct{}),
+		ctx:          ctx,
+		router:       router,
+		logger:       logger,
+		outbounds:    outbounds,
+		link:         link,
+		interval:     interval,
+		tolerance:    tolerance,
+		history:      history,
+		fallback:     fallback,
+		close:        make(chan struct{}),
+		sleepManager: service.PtrFromContext[sleep.Manager](ctx),
 	}
 }
 
@@ -293,6 +296,9 @@ func (g *URLTestGroup) Fallback(used adapter.Outbound) []adapter.Outbound {
 func (g *URLTestGroup) loopCheck() {
 	go g.CheckOutbounds(true)
 	for {
+		if g.sleepManager != nil {
+			<-g.sleepManager.Active()
+		}
 		select {
 		case <-g.close:
 			return

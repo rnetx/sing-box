@@ -1,15 +1,12 @@
 package tuic
 
 import (
-	"bytes"
-	"encoding/binary"
 	"io"
 
 	"github.com/sagernet/quic-go"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
-	M "github.com/sagernet/sing/common/metadata"
 )
 
 func (c *Client) loopMessages(conn *clientQUICConnection) {
@@ -38,7 +35,7 @@ func (c *Client) handleMessage(conn *clientQUICConnection, data []byte) error {
 	switch data[1] {
 	case CommandPacket:
 		message := udpMessagePool.Get().(*udpMessage)
-		err := decodeUDPMessage(message, bytes.NewReader(data[2:]))
+		err := decodeUDPMessage(message, data[2:])
 		if err != nil {
 			message.release()
 			return E.Cause(err, "decode UDP message")
@@ -86,44 +83,11 @@ func (c *Client) handleUniStream(conn *clientQUICConnection, stream quic.Receive
 	}
 	reader := io.MultiReader(bufio.NewCachedReader(stream, buffer), stream)
 	message := udpMessagePool.Get().(*udpMessage)
-	err = decodeUDPMessage(message, reader)
+	err = readUDPMessage(message, reader)
 	if err != nil {
 		message.release()
 		return err
 	}
 	conn.handleUDPMessage(message)
-	return nil
-}
-
-func decodeUDPMessage(message *udpMessage, reader io.Reader) error {
-	err := binary.Read(reader, binary.BigEndian, &message.sessionID)
-	if err != nil {
-		return err
-	}
-	err = binary.Read(reader, binary.BigEndian, &message.packetID)
-	if err != nil {
-		return err
-	}
-	err = binary.Read(reader, binary.BigEndian, &message.fragmentTotal)
-	if err != nil {
-		return err
-	}
-	err = binary.Read(reader, binary.BigEndian, &message.fragmentID)
-	if err != nil {
-		return err
-	}
-	message.destination, err = M.SocksaddrSerializer.ReadAddrPort(reader)
-	if err != nil {
-		return err
-	}
-	err = binary.Read(reader, binary.BigEndian, &message.dataLength)
-	if err != nil {
-		return err
-	}
-	message.data = buf.NewSize(int(message.dataLength))
-	_, err = message.data.ReadFullFrom(reader, message.data.FreeLen())
-	if err != nil {
-		return err
-	}
 	return nil
 }

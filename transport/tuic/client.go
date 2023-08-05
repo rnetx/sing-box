@@ -80,6 +80,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 		congestionControl: options.CongestionControl,
 		udpStream:         options.UDPStream,
 		zeroRTTHandshake:  options.ZeroRTTHandshake,
+		heartbeat:         options.Heartbeat,
 	}, nil
 }
 
@@ -194,14 +195,7 @@ func (c *Client) ListenPacket(ctx context.Context) (net.PacketConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := common.ContextWithCancelCause(ctx)
-	clientPacketConn := &udpPacketConn{
-		ctx:       ctx,
-		cancel:    cancel,
-		quicConn:  conn.quicConn,
-		data:      make(chan *udpMessage, 64),
-		udpStream: c.udpStream,
-	}
+	clientPacketConn := newUDPPacketConn(ctx, conn.quicConn, c.udpStream, false)
 	conn.udpAccess.Lock()
 	for {
 		connId := uint16(rand.Uint32())
@@ -231,7 +225,6 @@ type clientQUICConnection struct {
 	connErr    error
 	udpAccess  sync.RWMutex
 	udpConnMap map[uint16]*udpPacketConn
-	defragger  defragger
 }
 
 func (c *clientQUICConnection) active() bool {
@@ -264,14 +257,7 @@ func (c *clientQUICConnection) handleUDPMessage(message *udpMessage) {
 		return
 	default:
 	}
-	if message.fragmentTotal <= 1 {
-		udpConn.data <- message
-	} else {
-		newMessage := c.defragger.feed(message)
-		if newMessage != nil {
-			udpConn.data <- newMessage
-		}
-	}
+	udpConn.inputPacket(message)
 }
 
 func (c *clientQUICConnection) closeWithError(err error) {
@@ -284,6 +270,7 @@ func (c *clientQUICConnection) closeWithError(err error) {
 	}
 	c.connErr = err
 	close(c.connDone)
+	_ = c.quicConn.CloseWithError(0, "")
 }
 
 type clientConn struct {
@@ -300,10 +287,10 @@ func (c *clientConn) Read(b []byte) (n int, err error) {
 
 func (c *clientConn) Write(b []byte) (n int, err error) {
 	if !c.requestWritten {
-		request := buf.NewSize(2 + M.SocksaddrSerializer.AddrPortLen(c.destination) + len(b))
+		request := buf.NewSize(2 + addressSerializer.AddrPortLen(c.destination) + len(b))
 		request.WriteByte(Version)
 		request.WriteByte(CommandConnect)
-		M.SocksaddrSerializer.WriteAddrPort(request, c.destination)
+		addressSerializer.WriteAddrPort(request, c.destination)
 		request.Write(b)
 		_, err = c.stream.Write(request.Bytes())
 		if err != nil {

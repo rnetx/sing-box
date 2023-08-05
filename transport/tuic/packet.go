@@ -1,6 +1,7 @@
 package tuic
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/atomic"
 	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/cache"
 	M "github.com/sagernet/sing/common/metadata"
 )
 
@@ -36,8 +38,8 @@ func releaseMessages(messages []*udpMessage) {
 type udpMessage struct {
 	sessionID     uint16
 	packetID      uint16
-	fragmentTotal uint16
-	fragmentID    uint16
+	fragmentTotal uint8
+	fragmentID    uint8
 	destination   M.Socksaddr
 	dataLength    uint16
 	data          *buf.Buffer
@@ -62,15 +64,15 @@ func (m *udpMessage) pack() *buf.Buffer {
 		binary.Write(buffer, binary.BigEndian, m.packetID),
 		binary.Write(buffer, binary.BigEndian, m.fragmentTotal),
 		binary.Write(buffer, binary.BigEndian, m.fragmentID),
-		M.SocksaddrSerializer.WriteAddrPort(buffer, m.destination),
 		binary.Write(buffer, binary.BigEndian, uint16(m.data.Len())),
+		addressSerializer.WriteAddrPort(buffer, m.destination),
 		common.Error(buffer.Write(m.data.Bytes())),
 	)
 	return buffer
 }
 
 func (m *udpMessage) headerSize() int {
-	return 2 + 10 + M.SocksaddrSerializer.AddrPortLen(m.destination)
+	return 2 + 10 + addressSerializer.AddrPortLen(m.destination)
 }
 
 func fragUDPMessage(message *udpMessage, maxPacketSize int) []*udpMessage {
@@ -94,8 +96,11 @@ func fragUDPMessage(message *udpMessage, maxPacketSize int) []*udpMessage {
 	}
 	fragmentTotal := uint16(len(fragments))
 	for index, fragment := range fragments {
-		fragment.fragmentID = uint16(index)
-		fragment.fragmentTotal = fragmentTotal
+		fragment.fragmentID = uint8(index)
+		fragment.fragmentTotal = uint8(fragmentTotal)
+		if index > 0 {
+			fragment.destination = M.Socksaddr{}
+		}
 	}
 	return fragments
 }
@@ -111,6 +116,20 @@ type udpPacketConn struct {
 	packetId  atomic.Uint32
 	closeOnce sync.Once
 	isServer  bool
+	defragger *udpDefragger
+}
+
+func newUDPPacketConn(ctx context.Context, quicConn quic.Connection, udpStream bool, isServer bool) *udpPacketConn {
+	ctx, cancel := common.ContextWithCancelCause(ctx)
+	return &udpPacketConn{
+		ctx:       ctx,
+		cancel:    cancel,
+		quicConn:  quicConn,
+		data:      make(chan *udpMessage, 64),
+		udpStream: udpStream,
+		isServer:  isServer,
+		defragger: newUDPDefragger(),
+	}
 }
 
 func (c *udpPacketConn) ReadPacketThreadSafe() (buffer *buf.Buffer, destination M.Socksaddr, err error) {
@@ -186,7 +205,7 @@ func (c *udpPacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksaddr)
 	}
 	defer message.releaseMessage()
 	var err error
-	if c.udpMTU > 0 && buffer.Len() > c.udpMTU {
+	if !c.udpStream && c.udpMTU > 0 && buffer.Len() > c.udpMTU {
 		err = c.writePackets(fragUDPMessage(message, c.udpMTU))
 	} else {
 		err = c.writePacket(message)
@@ -247,6 +266,23 @@ func (c *udpPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	return
 }
 
+func (c *udpPacketConn) inputPacket(message *udpMessage) {
+	if message.fragmentTotal <= 1 {
+		select {
+		case c.data <- message:
+		default:
+		}
+	} else {
+		newMessage := c.defragger.feed(message)
+		if newMessage != nil {
+			select {
+			case c.data <- newMessage:
+			default:
+			}
+		}
+	}
+}
+
 func (c *udpPacketConn) writePackets(messages []*udpMessage) error {
 	defer releaseMessages(messages)
 	for _, message := range messages {
@@ -293,11 +329,16 @@ func (c *udpPacketConn) closeWithError(err error) {
 	c.cancel(err)
 	if !c.isServer {
 		buffer := buf.NewSize(4)
+		defer buffer.Release()
 		buffer.WriteByte(Version)
 		buffer.WriteByte(CommandDissociate)
 		binary.Write(buffer, binary.BigEndian, c.connId)
-		c.quicConn.SendMessage(buffer.Bytes())
-		buffer.Release()
+		sendStream, openErr := c.quicConn.OpenUniStream()
+		if openErr != nil {
+			return
+		}
+		defer sendStream.Close()
+		sendStream.Write(buffer.Bytes())
 	}
 }
 
@@ -317,39 +358,133 @@ func (c *udpPacketConn) SetWriteDeadline(t time.Time) error {
 	return os.ErrInvalid
 }
 
-type defragger struct {
-	packetId uint16
+type udpDefragger struct {
+	packetMap *cache.LruCache[uint16, *packetItem]
+}
+
+func newUDPDefragger() *udpDefragger {
+	return &udpDefragger{
+		packetMap: cache.New(
+			cache.WithAge[uint16, *packetItem](10),
+			cache.WithUpdateAgeOnGet[uint16, *packetItem](),
+			cache.WithEvict[uint16, *packetItem](func(key uint16, value *packetItem) {
+				releaseMessages(value.messages)
+			}),
+		),
+	}
+}
+
+type packetItem struct {
+	access   sync.Mutex
 	messages []*udpMessage
 	count    uint8
 }
 
-func (d *defragger) feed(m *udpMessage) *udpMessage {
+func (d *udpDefragger) feed(m *udpMessage) *udpMessage {
 	if m.fragmentTotal <= 1 {
 		return m
 	}
 	if m.fragmentID >= m.fragmentTotal {
 		return nil
 	}
-	if m.packetID != d.packetId {
-		releaseMessages(d.messages)
-		d.packetId = m.packetID
-		d.messages = make([]*udpMessage, m.fragmentTotal)
-		d.count = 1
-		d.messages[m.fragmentID] = m
-	} else if d.messages[m.fragmentID] == nil {
-		d.messages[m.fragmentID] = m
-		d.count++
-		if int(d.count) == len(d.messages) {
-			newMessage := udpMessagePool.Get().(*udpMessage)
-			*newMessage = *m
-			newMessage.data = buf.NewSize(int(m.dataLength))
-			for _, message := range d.messages {
-				newMessage.data.Write(message.data.Bytes())
-				message.releaseMessage()
-			}
-			d.messages = nil
-			return newMessage
-		}
+	item, _ := d.packetMap.LoadOrStore(m.packetID, newPacketItem)
+	item.access.Lock()
+	defer item.access.Unlock()
+	if int(m.fragmentTotal) != len(item.messages) {
+		releaseMessages(item.messages)
+		item.messages = make([]*udpMessage, m.fragmentTotal)
+		item.count = 1
+		item.messages[m.fragmentID] = m
+		return nil
 	}
+	if item.messages[m.fragmentID] != nil {
+		return nil
+	}
+	item.messages[m.fragmentID] = m
+	item.count++
+	if int(item.count) != len(item.messages) {
+		return nil
+	}
+	newMessage := udpMessagePool.Get().(*udpMessage)
+	*newMessage = *item.messages[0]
+	if m.dataLength > 0 {
+		newMessage.data = buf.NewSize(int(m.dataLength))
+		for _, message := range item.messages {
+			newMessage.data.Write(message.data.Bytes())
+			message.releaseMessage()
+		}
+		item.messages = nil
+		return newMessage
+	}
+	return nil
+}
+
+func newPacketItem() *packetItem {
+	return new(packetItem)
+}
+
+func readUDPMessage(message *udpMessage, reader io.Reader) error {
+	err := binary.Read(reader, binary.BigEndian, &message.sessionID)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.packetID)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.fragmentTotal)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.fragmentID)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.dataLength)
+	if err != nil {
+		return err
+	}
+	message.destination, err = addressSerializer.ReadAddrPort(reader)
+	if err != nil {
+		return err
+	}
+	message.data = buf.NewSize(int(message.dataLength))
+	_, err = message.data.ReadFullFrom(reader, message.data.FreeLen())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func decodeUDPMessage(message *udpMessage, data []byte) error {
+	reader := bytes.NewReader(data)
+	err := binary.Read(reader, binary.BigEndian, &message.sessionID)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.packetID)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.fragmentTotal)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.fragmentID)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.BigEndian, &message.dataLength)
+	if err != nil {
+		return err
+	}
+	message.destination, err = addressSerializer.ReadAddrPort(reader)
+	if err != nil {
+		return err
+	}
+	if reader.Len() != int(message.dataLength) {
+		return io.ErrUnexpectedEOF
+	}
+	message.data = buf.As(data[len(data)-reader.Len():])
 	return nil
 }

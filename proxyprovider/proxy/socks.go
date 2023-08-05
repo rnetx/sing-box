@@ -43,7 +43,7 @@ func (p *ProxySocks) Tag() string {
 }
 
 func (p *ProxySocks) Type() string {
-	return C.TypeSocks
+	return C.TypeSOCKS
 }
 
 func (p *ProxySocks) SetClashOptions(options any) bool {
@@ -75,7 +75,7 @@ func (p *ProxySocks) GenerateOptions() (*option.Outbound, error) {
 
 	opt := &option.Outbound{
 		Tag:  p.Tag(),
-		Type: C.TypeSocks,
+		Type: C.TypeSOCKS,
 		SocksOptions: option.SocksOutboundOptions{
 			ServerOptions: option.ServerOptions{
 				Server:     p.clashOptions.Server,

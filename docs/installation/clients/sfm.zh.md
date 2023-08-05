@@ -11,6 +11,7 @@
 
 * [AppStore](https://apps.apple.com/us/app/sing-box/id6451272673)
 * [TestFlight](https://testflight.apple.com/join/AcqO44FH)
+* [TestFlight (不稳定)](https://testflight.apple.com/join/Aqw9v5D3)
 
 #### 下载 (独立版本)
 
