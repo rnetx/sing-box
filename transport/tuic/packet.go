@@ -108,7 +108,7 @@ func fragUDPMessage(message *udpMessage, maxPacketSize int) []*udpMessage {
 type udpPacketConn struct {
 	ctx       context.Context
 	cancel    common.ContextCancelCauseFunc
-	connId    uint16
+	sessionID uint16
 	quicConn  quic.Connection
 	data      chan *udpMessage
 	udpStream bool
@@ -117,9 +117,10 @@ type udpPacketConn struct {
 	closeOnce sync.Once
 	isServer  bool
 	defragger *udpDefragger
+	onDestroy func()
 }
 
-func newUDPPacketConn(ctx context.Context, quicConn quic.Connection, udpStream bool, isServer bool) *udpPacketConn {
+func newUDPPacketConn(ctx context.Context, quicConn quic.Connection, udpStream bool, isServer bool, onDestroy func()) *udpPacketConn {
 	ctx, cancel := common.ContextWithCancelCause(ctx)
 	return &udpPacketConn{
 		ctx:       ctx,
@@ -129,6 +130,7 @@ func newUDPPacketConn(ctx context.Context, quicConn quic.Connection, udpStream b
 		udpStream: udpStream,
 		isServer:  isServer,
 		defragger: newUDPDefragger(),
+		onDestroy: onDestroy,
 	}
 }
 
@@ -172,7 +174,11 @@ func (c *udpPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	select {
 	case pkt := <-c.data:
 		n = copy(p, pkt.data.Bytes())
-		addr = pkt.destination.UDPAddr()
+		if pkt.destination.IsFqdn() {
+			addr = pkt.destination
+		} else {
+			addr = pkt.destination.UDPAddr()
+		}
 		pkt.releaseMessage()
 		return n, addr, nil
 	case <-c.ctx.Done():
@@ -197,7 +203,7 @@ func (c *udpPacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksaddr)
 	}
 	message := udpMessagePool.Get().(*udpMessage)
 	*message = udpMessage{
-		sessionID:     c.connId,
+		sessionID:     c.sessionID,
 		packetID:      uint16(packetId),
 		fragmentTotal: 1,
 		destination:   destination,
@@ -237,7 +243,7 @@ func (c *udpPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	}
 	message := udpMessagePool.Get().(*udpMessage)
 	*message = udpMessage{
-		sessionID:     c.connId,
+		sessionID:     c.sessionID,
 		packetID:      uint16(packetId),
 		fragmentTotal: 1,
 		destination:   M.SocksaddrFromNet(addr),
@@ -321,6 +327,7 @@ func (c *udpPacketConn) writePacket(message *udpMessage) error {
 func (c *udpPacketConn) Close() error {
 	c.closeOnce.Do(func() {
 		c.closeWithError(os.ErrClosed)
+		c.onDestroy()
 	})
 	return nil
 }
@@ -332,7 +339,7 @@ func (c *udpPacketConn) closeWithError(err error) {
 		defer buffer.Release()
 		buffer.WriteByte(Version)
 		buffer.WriteByte(CommandDissociate)
-		binary.Write(buffer, binary.BigEndian, c.connId)
+		binary.Write(buffer, binary.BigEndian, c.sessionID)
 		sendStream, openErr := c.quicConn.OpenUniStream()
 		if openErr != nil {
 			return

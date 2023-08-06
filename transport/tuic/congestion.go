@@ -38,7 +38,7 @@ func setCongestion(ctx context.Context, connection quic.Connection, congestionNa
 			congestion.NewBBRSender(
 				congestion.DefaultClock{},
 				congestion.GetInitialPacketSize(connection.RemoteAddr()),
-				10*congestion.InitialMaxDatagramSize,
+				congestion.InitialCongestionWindow*congestion.InitialMaxDatagramSize,
 				congestion.DefaultBBRMaxCongestionWindow*congestion.InitialMaxDatagramSize,
 			),
 		)

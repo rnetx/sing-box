@@ -71,7 +71,7 @@ func NewServer(options ServerOptions) (*Server, error) {
 		options.Heartbeat = 10 * time.Second
 	}
 	quicConfig := &quic.Config{
-		DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android"),
+		DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
 		MaxDatagramFrameSize:    1400,
 		EnableDatagrams:         true,
 		Allow0RTT:               options.ZeroRTTHandshake,
@@ -154,16 +154,6 @@ func (s *Server) Close() error {
 	return common.Close(
 		s.quicListener,
 	)
-}
-
-func (s *Server) loopConnections(listener *quic.Listener) error {
-	for {
-		connection, err := listener.Accept(s.ctx)
-		if err != nil {
-			return err
-		}
-		go s.handleConnection(connection)
-	}
 }
 
 func (s *Server) handleConnection(connection quic.Connection) {
@@ -322,13 +312,15 @@ func (s *serverSession) handleAuthTimeout() {
 
 func (s *serverSession) loopStreams() {
 	for {
-		uniStream, err := s.quicConn.AcceptStream(s.ctx)
+		stream, err := s.quicConn.AcceptStream(s.ctx)
 		if err != nil {
 			return
 		}
 		go func() {
-			err = s.handleStream(uniStream)
+			err = s.handleStream(stream)
 			if err != nil {
+				stream.CancelRead(0)
+				stream.Close()
 				s.logger.Error(E.Cause(err, "handle stream request"))
 			}
 		}()
