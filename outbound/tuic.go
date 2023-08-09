@@ -57,9 +57,13 @@ func NewTUIC(ctx context.Context, router adapter.Router, logger log.ContextLogge
 	case "quic":
 		udpStream = true
 	}
+	outboundDialer, err := dialer.New(router, options.DialerOptions)
+	if err != nil {
+		return nil, err
+	}
 	client, err := tuic.NewClient(tuic.ClientOptions{
 		Context:           ctx,
-		Dialer:            dialer.New(router, options.DialerOptions),
+		Dialer:            outboundDialer,
 		ServerAddress:     options.ServerOptions.Build(),
 		TLSConfig:         tlsConfig,
 		UUID:              userUUID,
@@ -114,8 +118,8 @@ func (h *TUIC) NewPacketConnection(ctx context.Context, conn N.PacketConn, metad
 	return NewPacketConnection(ctx, h, conn, metadata)
 }
 
-func (h *TUIC) InterfaceUpdated() error {
-	return h.client.CloseWithError(E.New("network changed"))
+func (h *TUIC) InterfaceUpdated() {
+	_ = h.client.CloseWithError(E.New("network changed"))
 }
 
 func (h *TUIC) Close() error {

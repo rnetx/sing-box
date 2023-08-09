@@ -43,9 +43,13 @@ func NewMultiAddr(ctx context.Context, router adapter.Router, logger log.Context
 			tag:          tag,
 			dependencies: withDialerDependency(options.DialerOptions),
 		},
-		ctx:    ctx,
-		dialer: dialer.New(router, options.DialerOptions),
+		ctx: ctx,
 	}
+	outboundDialer, err := dialer.New(router, options.DialerOptions)
+	if err != nil {
+		return nil, err
+	}
+	m.dialer = outboundDialer
 
 	if options.Addresses == nil || len(options.Addresses) == 0 {
 		return nil, E.New("no address found")

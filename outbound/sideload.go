@@ -48,9 +48,13 @@ func NewSideLoad(ctx context.Context, router adapter.Router, logger log.ContextL
 			logger:   logger,
 			tag:      tag,
 		},
-		ctx:    ctx,
-		dialer: dialer.New(router, options.DialerOptions),
+		ctx: ctx,
 	}
+	outboundDialer, err := dialer.New(router, options.DialerOptions)
+	if err != nil {
+		return nil, err
+	}
+	outbound.dialer = outboundDialer
 	if options.Command == nil || len(options.Command) == 0 {
 		return nil, E.New("command not found")
 	}

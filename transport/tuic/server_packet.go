@@ -13,7 +13,7 @@ func (s *serverSession) loopMessages() {
 	case <-s.authDone:
 	}
 	for {
-		message, err := s.quicConn.ReceiveMessage()
+		message, err := s.quicConn.ReceiveMessage(s.ctx)
 		if err != nil {
 			s.closeWithError(E.Cause(err, "receive message"))
 			return

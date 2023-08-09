@@ -60,6 +60,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 		DisablePathMTUDiscovery: !(runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin"),
 		MaxDatagramFrameSize:    1400,
 		EnableDatagrams:         true,
+		MaxIncomingUniStreams:   1 << 60,
 	}
 	switch options.CongestionControl {
 	case "":
@@ -247,6 +248,7 @@ func (c *clientQUICConnection) closeWithError(err error) {
 		c.connErr = err
 		close(c.connDone)
 		_ = c.quicConn.CloseWithError(0, "")
+		_ = c.rawConn.Close()
 	})
 }
 

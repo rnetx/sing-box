@@ -24,21 +24,21 @@ require (
 	github.com/sagernet/cloudflare-tls v0.0.0-20221031050923-d70792f4c3a0
 	github.com/sagernet/gomobile v0.0.0-20230728014906-3de089147f59
 	github.com/sagernet/gvisor v0.0.0-20230627031050-1ab0276e0dd2
-	github.com/sagernet/quic-go v0.0.0-20230731154841-cdc97aca6239
+	github.com/sagernet/quic-go v0.0.0-20230809023643-d720ed35ac2b
 	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691
-	github.com/sagernet/sing v0.2.10-0.20230802114159-a755de3bbd49
+	github.com/sagernet/sing v0.2.10-0.20230807080248-4db0062caa0a
 	github.com/sagernet/sing-dns v0.1.9-0.20230731012726-ad50da89b659
 	github.com/sagernet/sing-mux v0.1.3-0.20230803070305-ea4a972acd21
 	github.com/sagernet/sing-shadowsocks v0.2.4
 	github.com/sagernet/sing-shadowsocks2 v0.1.3
 	github.com/sagernet/sing-shadowtls v0.1.4
-	github.com/sagernet/sing-tun v0.1.11-0.20230723061951-767ce42377f1
+	github.com/sagernet/sing-tun v0.1.12-0.20230808120247-47ab78d303db
 	github.com/sagernet/sing-vmess v0.1.7
 	github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
 	github.com/sagernet/websocket v0.0.0-20220913015213-615516348b4e
-	github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77
+	github.com/sagernet/wireguard-go v0.0.0-20230807125731-5d4a7ef2dc5f
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
 	go.etcd.io/bbolt v1.3.7
@@ -69,6 +69,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
@@ -83,9 +84,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.14 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/qtls-go1-18 v0.2.0 // indirect
-	github.com/quic-go/qtls-go1-19 v0.3.2 // indirect
-	github.com/quic-go/qtls-go1-20 v0.2.2 // indirect
+	github.com/quic-go/qtls-go1-20 v0.3.1 // indirect
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
 	github.com/scjalliance/comshim v0.0.0-20230315213746-5e51f40bd3b9 // indirect
@@ -101,6 +100,6 @@ require (
 	golang.org/x/tools v0.10.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230525234030-28d5490b6b19 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.2.1 // indirect
 )
