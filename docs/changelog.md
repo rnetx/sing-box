@@ -1,3 +1,7 @@
+#### 1.4.0-beta.3
+
+* Fixes and improvements
+
 #### 1.4.0-beta.2
 
 * Add MultiPath TCP support **1**

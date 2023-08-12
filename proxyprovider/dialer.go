@@ -8,7 +8,7 @@ import (
 	"github.com/sagernet/sing/common"
 )
 
-func (p *ProxyProvider) initRequestDialer() {
+func (p *ProxyProvider) initRequestDialer() error {
 	requestDialerOptions := common.PtrValueOrDefault(p.options.RequestDialerOptions)
 	dialerOptions := option.DialerOptions{
 		BindInterface:      requestDialerOptions.BindInterface,
@@ -22,6 +22,10 @@ func (p *ProxyProvider) initRequestDialer() {
 		UDPFragment:        requestDialerOptions.UDPFragment,
 		UDPFragmentDefault: requestDialerOptions.UDPFragmentDefault,
 	}
-	dialer := D.NewSimple(dialerOptions)
+	dialer, err := D.NewSimple(dialerOptions)
+	if err != nil {
+		return err
+	}
 	p.dialer = dialer
+	return nil
 }

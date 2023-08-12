@@ -36,8 +36,11 @@ func NewProxyProvider(ctx context.Context, router adapter.Router, logFactory log
 		p.logger = logFactory.NewLogger(F.ToString("proxyprovider", "[", options.Tag, "]"))
 	}
 
-	p.initRequestDialer()
-	err := p.initDNS()
+	err := p.initRequestDialer()
+	if err != nil {
+		return nil, err
+	}
+	err = p.initDNS()
 	if err != nil {
 		return nil, err
 	}
