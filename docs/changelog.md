@@ -1,3 +1,27 @@
+#### 1.4.0-beta.6
+
+* Add `udp_over_stream` option for TUIC client **1**
+* Add `include_interface` and `exclude_interface` options for tun inbound
+* Fixes and improvements
+
+**1**:
+
+This is the TUIC port of the [UDP over TCP protocol](/configuration/shared/udp-over-tcp), designed to provide a QUIC
+stream based UDP relay mode that TUIC does not provide. Since it is an add-on protocol, you will need to use sing-box or
+another program compatible with the protocol as a server.
+
+This mode has no positive effect in a proper UDP proxy scenario and should only be applied to relay streaming UDP
+traffic (basically QUIC streams).
+
+#### 1.4.0-beta.5
+
+* Fixes and improvements
+
+#### 1.4.0-beta.4
+
+* Graphical clients: Persistence group expansion state
+* Fixes and improvements
+
 #### 1.4.0-beta.3
 
 * Fixes and improvements

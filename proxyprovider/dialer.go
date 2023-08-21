@@ -19,6 +19,7 @@ func (p *ProxyProvider) initRequestDialer() error {
 		ReuseAddr:          requestDialerOptions.ReuseAddr,
 		ConnectTimeout:     requestDialerOptions.ConnectTimeout,
 		TCPFastOpen:        requestDialerOptions.TCPFastOpen,
+		TCPMultiPath:       requestDialerOptions.TCPMultiPath,
 		UDPFragment:        requestDialerOptions.UDPFragment,
 		UDPFragmentDefault: requestDialerOptions.UDPFragmentDefault,
 	}
