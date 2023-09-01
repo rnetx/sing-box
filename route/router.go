@@ -85,7 +85,7 @@ type Router struct {
 	interfaceMonitor                   tun.DefaultInterfaceMonitor
 	packageManager                     tun.PackageManager
 	processSearcher                    process.Searcher
-	timeService                        adapter.TimeService
+	timeService                        *ntp.Service
 	pauseManager                       pause.Manager
 	clashServer                        adapter.ClashServer
 	v2rayServer                        adapter.V2RayServer
@@ -963,13 +963,6 @@ func (r *Router) PackageManager() tun.PackageManager {
 	return r.packageManager
 }
 
-func (r *Router) TimeFunc() func() time.Time {
-	if r.timeService == nil {
-		return nil
-	}
-	return r.timeService.TimeFunc()
-}
-
 func (r *Router) ClashServer() adapter.ClashServer {
 	return r.clashServer
 }
@@ -1018,14 +1011,7 @@ func (r *Router) notifyNetworkUpdate(event int) {
 		}
 	}
 
-	conntrack.Close()
-
-	for _, outbound := range r.outbounds {
-		listener, isListener := outbound.(adapter.InterfaceUpdateListener)
-		if isListener {
-			listener.InterfaceUpdated()
-		}
-	}
+	r.ResetNetwork()
 	return
 }
 
@@ -1037,6 +1023,10 @@ func (r *Router) ResetNetwork() error {
 		if isListener {
 			listener.InterfaceUpdated()
 		}
+	}
+
+	for _, transport := range r.transports {
+		transport.Reset()
 	}
 	return nil
 }

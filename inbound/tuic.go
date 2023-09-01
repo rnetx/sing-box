@@ -34,11 +34,7 @@ func NewTUIC(ctx context.Context, router adapter.Router, logger log.ContextLogge
 	if options.TLS == nil || !options.TLS.Enabled {
 		return nil, C.ErrTLSRequired
 	}
-	tlsConfig, err := tls.NewServer(ctx, router, logger, common.PtrValueOrDefault(options.TLS))
-	if err != nil {
-		return nil, err
-	}
-	rawConfig, err := tlsConfig.Config()
+	tlsConfig, err := tls.NewServer(ctx, logger, common.PtrValueOrDefault(options.TLS))
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +63,7 @@ func NewTUIC(ctx context.Context, router adapter.Router, logger log.ContextLogge
 	server, err := tuic.NewServer(tuic.ServerOptions{
 		Context:           ctx,
 		Logger:            logger,
-		TLSConfig:         rawConfig,
+		TLSConfig:         tlsConfig,
 		Users:             users,
 		CongestionControl: options.CongestionControl,
 		AuthTimeout:       time.Duration(options.AuthTimeout),
@@ -99,6 +95,12 @@ func (h *TUIC) newPacketConnection(ctx context.Context, conn N.PacketConn, metad
 }
 
 func (h *TUIC) Start() error {
+	if h.tlsConfig != nil {
+		err := h.tlsConfig.Start()
+		if err != nil {
+			return err
+		}
+	}
 	packetConn, err := h.myInboundAdapter.ListenUDP()
 	if err != nil {
 		return err
@@ -109,6 +111,7 @@ func (h *TUIC) Start() error {
 func (h *TUIC) Close() error {
 	return common.Close(
 		&h.myInboundAdapter,
+		h.tlsConfig,
 		common.PtrOrNil(h.server),
 	)
 }
