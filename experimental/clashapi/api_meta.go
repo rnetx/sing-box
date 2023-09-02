@@ -16,6 +16,7 @@ import (
 // API created by Clash.Meta
 
 func (s *Server) setupMetaAPI(r chi.Router) {
+	r.Post("/restart", reload(s))
 	r.Get("/memory", memory(s.trafficManager))
 	r.Mount("/group", groupRouter(s))
 }

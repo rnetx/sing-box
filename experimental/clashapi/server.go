@@ -115,7 +115,7 @@ func NewServer(ctx context.Context, router adapter.Router, logFactory log.Observ
 	chiRouter.Use(cors.Handler)
 	chiRouter.Group(func(r chi.Router) {
 		r.Use(authentication(options.Secret))
-		r.Get("/", hello(options.ExternalUI != ""))
+		r.Get("/", hello(options.ExternalUI != "" || options.ExternalUIBuildIn))
 		r.Get("/logs", getLogs(logFactory))
 		r.Get("/traffic", traffic(trafficManager))
 		r.Get("/version", version)
