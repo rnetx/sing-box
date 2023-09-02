@@ -22,6 +22,7 @@ const (
 	TypeShadowsocksR = "shadowsocksr"
 	TypeVLESS        = "vless"
 	TypeTUIC         = "tuic"
+	TypeHysteria2    = "hysteria2"
 	TypeSideLoad     = "sideload"
 	TypeMultiAddr    = "multiaddr"
 )
@@ -67,6 +68,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "VLESS"
 	case TypeTUIC:
 		return "TUIC"
+	case TypeHysteria2:
+		return "Hysteria2"
 	case TypeSideLoad:
 		return "SideLoad"
 	case TypeMultiAddr:

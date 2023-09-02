@@ -24,6 +24,7 @@ type _Outbound struct {
 	ShadowsocksROptions ShadowsocksROutboundOptions `json:"-"`
 	VLESSOptions        VLESSOutboundOptions        `json:"-"`
 	TUICOptions         TUICOutboundOptions         `json:"-"`
+	Hysteria2Options    Hysteria2OutboundOptions    `json:"-"`
 	SideLoadOptions     SideLoadOutboundOptions     `json:"-"`
 	MultiAddrOptions    MultiAddrOutboundOptions    `json:"-"`
 	SelectorOptions     SelectorOutboundOptions     `json:"-"`
@@ -65,6 +66,8 @@ func (h Outbound) MarshalJSON() ([]byte, error) {
 		v = h.VLESSOptions
 	case C.TypeTUIC:
 		v = h.TUICOptions
+	case C.TypeHysteria2:
+		v = h.Hysteria2Options
 	case C.TypeSideLoad:
 		v = h.SideLoadOptions
 	case C.TypeMultiAddr:
@@ -116,6 +119,8 @@ func (h *Outbound) UnmarshalJSON(bytes []byte) error {
 		v = &h.VLESSOptions
 	case C.TypeTUIC:
 		v = &h.TUICOptions
+	case C.TypeHysteria2:
+		v = &h.Hysteria2Options
 	case C.TypeSideLoad:
 		v = &h.SideLoadOptions
 	case C.TypeMultiAddr:
