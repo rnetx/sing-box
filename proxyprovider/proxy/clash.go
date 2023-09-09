@@ -20,6 +20,8 @@ const (
 	ClashTypeVMess        = "vmess"
 	ClashTypeTrojan       = "trojan"
 	ClashTypeVLESS        = "vless"
+	ClashTypeHysteria     = "hysteria"
+	ClashTypeTUIC         = "tuic"
 )
 
 type proxyClashDefault struct {
@@ -40,6 +42,8 @@ type ProxyClashOptions struct {
 	VMessOptions        proxyClashVMess        `yaml:"-"`
 	TrojanOptions       proxyClashTrojan       `yaml:"-"`
 	VLESSOptions        proxyClashVLESS        `yaml:"-"`
+	HysteriaOptions     proxyClashHysteria     `yaml:"-"`
+	TUICOptions         proxyClashTUIC         `yaml:"-"`
 }
 
 type _proxyClashOptions ProxyClashOptions
@@ -67,6 +71,10 @@ func (p *ProxyClashOptions) UnmarshalYAML(unmarshal func(any) error) error {
 		return unmarshal(&p.TrojanOptions)
 	case ClashTypeVLESS:
 		return unmarshal(&p.VLESSOptions)
+	case ClashTypeHysteria:
+		return unmarshal(&p.HysteriaOptions)
+	case ClashTypeTUIC:
+		return unmarshal(&p.TUICOptions)
 	default:
 		// return E.New("unsupported clash proxy type: ", raw.Type)
 		return nil
@@ -97,6 +105,12 @@ func (p *ProxyClashOptions) ToProxy() (Proxy, error) {
 	case ClashTypeVLESS:
 		opt = &ProxyVLESS{}
 		opt.SetClashOptions(p.VLESSOptions)
+	case ClashTypeHysteria:
+		opt = &ProxyHysteria{}
+		opt.SetClashOptions(p.HysteriaOptions)
+	case ClashTypeTUIC:
+		opt = &ProxyTUIC{}
+		opt.SetClashOptions(p.TUICOptions)
 	default:
 		return nil, E.New("unsupported clash proxy type: ", p.Type)
 	}
