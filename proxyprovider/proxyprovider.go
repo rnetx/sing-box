@@ -76,10 +76,12 @@ func (p *ProxyProvider) GetOutboundOptions() ([]option.Outbound, error) {
 		}
 	}
 
+	var errs []error
 	outbounds := make([]option.Outbound, 0)
 	for i, px := range *peerList {
 		outboundOptions, err := px.GenerateOptions()
 		if err != nil {
+			errs = append(errs, E.Cause(err, "generate outbound[", i, "] options"))
 			continue
 		}
 		tag := px.Tag()
@@ -90,7 +92,7 @@ func (p *ProxyProvider) GetOutboundOptions() ([]option.Outbound, error) {
 		outbounds = append(outbounds, *outboundOptions)
 	}
 	if len(outbounds) == 0 {
-		return nil, E.New("proxy list is empty")
+		return nil, E.Cause(E.Errors(errs...), "proxy list is empty")
 	}
 
 	groupOutbounds, err := p.getCustomGroupOptions(&outbounds)
