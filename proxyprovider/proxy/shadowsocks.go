@@ -24,10 +24,11 @@ type proxyClashShadowsocks struct {
 	Cipher   string `yaml:"cipher,omitempty"`
 	Password string `yaml:"password,omitempty"`
 	//
-	Plugin     string         `yaml:"plugin,omitempty"`
-	PluginOpts map[string]any `yaml:"plugin-opts,omitempty"`
-	UDP        *bool          `yaml:"udp,omitempty"`
-	UDPOverTCP bool           `yaml:"udp-over-tcp,omitempty"`
+	Plugin            string         `yaml:"plugin,omitempty"`
+	PluginOpts        map[string]any `yaml:"plugin-opts,omitempty"`
+	UDP               *bool          `yaml:"udp,omitempty"`
+	UDPOverTCP        bool           `yaml:"udp-over-tcp,omitempty"`
+	UDPOverTCPVersion uint8          `yaml:"udp-over-tcp-version,omitempty"`
 }
 
 type ProxyShadowsocks struct {
@@ -125,7 +126,7 @@ func (p *ProxyShadowsocks) GenerateOptions() (*option.Outbound, error) {
 	if p.clashOptions.UDPOverTCP {
 		opt.ShadowsocksOptions.UDPOverTCPOptions = &option.UDPOverTCPOptions{
 			Enabled: true,
-			Version: 1,
+			Version: p.clashOptions.UDPOverTCPVersion,
 		}
 	}
 
