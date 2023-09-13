@@ -36,6 +36,8 @@ type proxyClashVMess struct {
 	HTTP2Options *proxyClashHTTP2Options `yaml:"h2-opts,omitempty"`
 	GrpcOptions  *proxyClashGrpcOptions  `yaml:"grpc-opts,omitempty"`
 	//
+	MuxOptions *proxyClashSingMuxOptions `yaml:"smux,omitempty"`
+	//
 	RealityOptions *proxyClashRealityOptions `yaml:"reality-opts,omitempty"`
 }
 
@@ -324,6 +326,17 @@ func (p *ProxyVMess) GenerateOptions() (*option.Outbound, error) {
 					ShortID:   p.clashOptions.RealityOptions.ShortID,
 				}
 			}
+		}
+	}
+
+	if p.clashOptions.MuxOptions != nil && p.clashOptions.MuxOptions.Enabled {
+		opt.VMessOptions.Multiplex = &option.MultiplexOptions{
+			Enabled:        true,
+			Protocol:       p.clashOptions.MuxOptions.Protocol,
+			MaxConnections: p.clashOptions.MuxOptions.MaxConnections,
+			MaxStreams:     p.clashOptions.MuxOptions.MaxStreams,
+			MinStreams:     p.clashOptions.MuxOptions.MinStreams,
+			Padding:        p.clashOptions.MuxOptions.Padding,
 		}
 	}
 

@@ -32,6 +32,8 @@ type proxyClashTrojan struct {
 	GrpcOptions *proxyClashGrpcOptions `yaml:"grpc-opts,omitempty"`
 	WSOptions   *proxyClashWSOptions   `yaml:"ws-opts,omitempty"`
 	//
+	MuxOptions *proxyClashSingMuxOptions `yaml:"smux,omitempty"`
+	//
 	RealityOptions *proxyClashRealityOptions `yaml:"reality-opts,omitempty"`
 }
 
@@ -157,6 +159,17 @@ func (p *ProxyTrojan) GenerateOptions() (*option.Outbound, error) {
 			GRPCOptions: option.V2RayGRPCOptions{
 				ServiceName: p.clashOptions.GrpcOptions.ServiceName,
 			},
+		}
+	}
+
+	if p.clashOptions.MuxOptions != nil && p.clashOptions.MuxOptions.Enabled {
+		opt.TrojanOptions.Multiplex = &option.MultiplexOptions{
+			Enabled:        true,
+			Protocol:       p.clashOptions.MuxOptions.Protocol,
+			MaxConnections: p.clashOptions.MuxOptions.MaxConnections,
+			MaxStreams:     p.clashOptions.MuxOptions.MaxStreams,
+			MinStreams:     p.clashOptions.MuxOptions.MinStreams,
+			Padding:        p.clashOptions.MuxOptions.Padding,
 		}
 	}
 
