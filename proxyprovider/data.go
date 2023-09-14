@@ -164,6 +164,8 @@ func (p *ProxyProvider) request() (*SubscriptionData, error) {
 			if err == nil {
 				s.Expire = time.Unix(int64(expireUint64), 0)
 			}
+		} else {
+			s.Expire = time.Unix(4102358400, 0)
 		}
 	}
 	err = s.parse()
