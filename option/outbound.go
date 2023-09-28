@@ -25,6 +25,7 @@ type _Outbound struct {
 	VLESSOptions        VLESSOutboundOptions        `json:"-"`
 	TUICOptions         TUICOutboundOptions         `json:"-"`
 	Hysteria2Options    Hysteria2OutboundOptions    `json:"-"`
+	RandomAddrOptions   RandomAddrOutboundOptions   `json:"-"`
 	SelectorOptions     SelectorOutboundOptions     `json:"-"`
 	URLTestOptions      URLTestOutboundOptions      `json:"-"`
 }
@@ -66,6 +67,8 @@ func (h Outbound) MarshalJSON() ([]byte, error) {
 		v = h.TUICOptions
 	case C.TypeHysteria2:
 		v = h.Hysteria2Options
+	case C.TypeRandomAddr:
+		v = h.RandomAddrOptions
 	case C.TypeSelector:
 		v = h.SelectorOptions
 	case C.TypeURLTest:
@@ -115,6 +118,8 @@ func (h *Outbound) UnmarshalJSON(bytes []byte) error {
 		v = &h.TUICOptions
 	case C.TypeHysteria2:
 		v = &h.Hysteria2Options
+	case C.TypeRandomAddr:
+		v = &h.RandomAddrOptions
 	case C.TypeSelector:
 		v = &h.SelectorOptions
 	case C.TypeURLTest:
