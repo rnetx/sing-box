@@ -22,6 +22,8 @@ type ClashSocks struct {
 	ClientFingerprint string `yaml:"client-fingerprint"`
 	//
 	UDP *bool `yaml:"udp"`
+	//
+	TFO bool `yaml:"tfo,omitempty"`
 }
 
 func (c *ClashSocks) Tag() string {
@@ -51,6 +53,10 @@ func (c *ClashSocks) GenerateOptions() (*option.Outbound, error) {
 	}
 	if c.UDP != nil && !*c.UDP {
 		outboundOptions.SocksOptions.Network = "tcp"
+	}
+
+	if c.TFO {
+		outboundOptions.SocksOptions.TCPFastOpen = true
 	}
 
 	switch c.ClashProxyBasic.IPVersion {

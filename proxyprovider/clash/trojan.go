@@ -29,6 +29,8 @@ type ClashTrojan struct {
 	GrpcOptions *ClashTransportGRPC      `yaml:"grpc-opts"`
 	//
 	RealityOptions *ClashTransportReality `yaml:"reality-opts"`
+	//
+	TFO bool `yaml:"tfo,omitempty"`
 }
 
 func (c *ClashTrojan) Tag() string {
@@ -130,6 +132,10 @@ func (c *ClashTrojan) GenerateOptions() (*option.Outbound, error) {
 			Type:        C.V2RayTransportTypeGRPC,
 			GRPCOptions: *grpcOptions,
 		}
+	}
+
+	if c.TFO {
+		outboundOptions.TrojanOptions.TCPFastOpen = true
 	}
 
 	switch c.ClashProxyBasic.IPVersion {

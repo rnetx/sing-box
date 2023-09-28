@@ -146,5 +146,7 @@ func (c *ClashHysteria) GenerateOptions() (*option.Outbound, error) {
 		}
 	}
 
+	outboundOptions.HysteriaOptions.TLS = tlsOptions
+
 	return outboundOptions, nil
 }

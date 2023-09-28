@@ -34,6 +34,8 @@ type ClashVLESS struct {
 	GrpcOptions  *ClashTransportGRPC      `yaml:"grpc-opts"`
 	//
 	RealityOptions *ClashTransportReality `yaml:"reality-opts"`
+	//
+	TFO bool `yaml:"tfo,omitempty"`
 }
 
 func (c *ClashVLESS) Tag() string {
@@ -304,6 +306,10 @@ func (c *ClashVLESS) GenerateOptions() (*option.Outbound, error) {
 
 			outboundOptions.VLESSOptions.TLS = tlsOptions
 		}
+	}
+
+	if c.TFO {
+		outboundOptions.VLESSOptions.TCPFastOpen = true
 	}
 
 	switch c.ClashProxyBasic.IPVersion {

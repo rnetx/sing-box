@@ -97,5 +97,7 @@ func (c *ClashTUIC) GenerateOptions() (*option.Outbound, error) {
 		}
 	}
 
+	outboundOptions.TUICOptions.TLS = tlsOptions
+
 	return outboundOptions, nil
 }

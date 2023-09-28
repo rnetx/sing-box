@@ -19,6 +19,8 @@ type ClashHTTP struct {
 	ServerName        string `yaml:"servername"`
 	SNI               string `yaml:"sni"`
 	ClientFingerprint string `yaml:"client-fingerprint"`
+	//
+	TFO bool `yaml:"tfo,omitempty"`
 }
 
 func (c *ClashHTTP) Tag() string {
@@ -64,6 +66,10 @@ func (c *ClashHTTP) GenerateOptions() (*option.Outbound, error) {
 		}
 
 		outboundOptions.HTTPOptions.TLS = tlsOptions
+	}
+
+	if c.TFO {
+		outboundOptions.HTTPOptions.TCPFastOpen = true
 	}
 
 	switch c.ClashProxyBasic.IPVersion {
