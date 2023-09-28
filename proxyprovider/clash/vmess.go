@@ -35,6 +35,8 @@ type ClashVMess struct {
 	RealityOptions *ClashTransportReality `yaml:"reality-opts"`
 	//
 	TFO bool `yaml:"tfo,omitempty"`
+	//
+	MuxOptions *ClashSingMuxOptions `yaml:"smux,omitempty"`
 }
 
 func (c *ClashVMess) Tag() string {
@@ -298,6 +300,17 @@ func (c *ClashVMess) GenerateOptions() (*option.Outbound, error) {
 
 	if c.TFO {
 		outboundOptions.VMessOptions.TCPFastOpen = true
+	}
+
+	if c.MuxOptions != nil && c.MuxOptions.Enabled {
+		outboundOptions.VLESSOptions.Multiplex = &option.MultiplexOptions{
+			Enabled:        true,
+			Protocol:       c.MuxOptions.Protocol,
+			MaxConnections: c.MuxOptions.MaxConnections,
+			MinStreams:     c.MuxOptions.MinStreams,
+			MaxStreams:     c.MuxOptions.MaxStreams,
+			Padding:        c.MuxOptions.Padding,
+		}
 	}
 
 	switch c.ClashProxyBasic.IPVersion {

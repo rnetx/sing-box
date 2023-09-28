@@ -26,6 +26,8 @@ type ClashShadowsocks struct {
 	UDPOverTCPVersion uint8          `yaml:"udp-over-tcp-version,omitempty"`
 	//
 	TFO bool `yaml:"tfo,omitempty"`
+	//
+	MuxOptions *ClashSingMuxOptions `yaml:"smux,omitempty"`
 }
 
 func (c *ClashShadowsocks) Tag() string {
@@ -91,6 +93,17 @@ func (c *ClashShadowsocks) GenerateOptions() (*option.Outbound, error) {
 
 	if c.TFO {
 		outboundOptions.ShadowsocksOptions.TCPFastOpen = true
+	}
+
+	if c.MuxOptions != nil && c.MuxOptions.Enabled {
+		outboundOptions.ShadowsocksOptions.MultiplexOptions = &option.MultiplexOptions{
+			Enabled:        true,
+			Protocol:       c.MuxOptions.Protocol,
+			MaxConnections: c.MuxOptions.MaxConnections,
+			MinStreams:     c.MuxOptions.MinStreams,
+			MaxStreams:     c.MuxOptions.MaxStreams,
+			Padding:        c.MuxOptions.Padding,
+		}
 	}
 
 	switch c.ClashProxyBasic.IPVersion {

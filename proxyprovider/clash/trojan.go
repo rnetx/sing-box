@@ -31,6 +31,8 @@ type ClashTrojan struct {
 	RealityOptions *ClashTransportReality `yaml:"reality-opts"`
 	//
 	TFO bool `yaml:"tfo,omitempty"`
+	//
+	MuxOptions *ClashSingMuxOptions `yaml:"smux,omitempty"`
 }
 
 func (c *ClashTrojan) Tag() string {
@@ -136,6 +138,17 @@ func (c *ClashTrojan) GenerateOptions() (*option.Outbound, error) {
 
 	if c.TFO {
 		outboundOptions.TrojanOptions.TCPFastOpen = true
+	}
+
+	if c.MuxOptions != nil && c.MuxOptions.Enabled {
+		outboundOptions.TrojanOptions.Multiplex = &option.MultiplexOptions{
+			Enabled:        true,
+			Protocol:       c.MuxOptions.Protocol,
+			MaxConnections: c.MuxOptions.MaxConnections,
+			MinStreams:     c.MuxOptions.MinStreams,
+			MaxStreams:     c.MuxOptions.MaxStreams,
+			Padding:        c.MuxOptions.Padding,
+		}
 	}
 
 	switch c.ClashProxyBasic.IPVersion {
