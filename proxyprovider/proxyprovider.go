@@ -210,6 +210,13 @@ func (p *ProxyProvider) GetFullOutboundOptions() ([]option.Outbound, error) {
 	outbounds := p.cache.Outbounds
 	p.cacheLock.RUnlock()
 
+	if p.dialer != nil {
+		for i := range outbounds {
+			outbound := &outbounds[i]
+			setDialerOptions(outbound, p.dialer)
+		}
+	}
+
 	var outboundTagMap map[string]string
 	finalOutbounds := make([]option.Outbound, 0, len(outbounds))
 	finalOutbounds = append(finalOutbounds, outbounds...)
@@ -417,4 +424,70 @@ func (p *ProxyProvider) LastUpdateTime() time.Time {
 		return p.cache.LastUpdate
 	}
 	return time.Time{}
+}
+
+func setDialerOptions(outbound *option.Outbound, dialer *option.DialerOptions) {
+	newDialer := copyDialerOptions(dialer)
+	switch outbound.Type {
+	case C.TypeDirect:
+		outbound.DirectOptions.DialerOptions = newDialer
+	case C.TypeHTTP:
+		outbound.HTTPOptions.DialerOptions = newDialer
+	case C.TypeShadowsocks:
+		outbound.ShadowsocksOptions.DialerOptions = newDialer
+	case C.TypeVMess:
+		outbound.VMessOptions.DialerOptions = newDialer
+	case C.TypeTrojan:
+		outbound.TrojanOptions.DialerOptions = newDialer
+	case C.TypeWireGuard:
+		outbound.WireGuardOptions.DialerOptions = newDialer
+	case C.TypeHysteria:
+		outbound.HysteriaOptions.DialerOptions = newDialer
+	case C.TypeTor:
+		outbound.TorOptions.DialerOptions = newDialer
+	case C.TypeSSH:
+		outbound.SSHOptions.DialerOptions = newDialer
+	case C.TypeShadowTLS:
+		outbound.ShadowTLSOptions.DialerOptions = newDialer
+	case C.TypeShadowsocksR:
+		outbound.ShadowsocksROptions.DialerOptions = newDialer
+	case C.TypeVLESS:
+		outbound.VLESSOptions.DialerOptions = newDialer
+	case C.TypeTUIC:
+		outbound.TUICOptions.DialerOptions = newDialer
+	case C.TypeHysteria2:
+		outbound.Hysteria2Options.DialerOptions = newDialer
+	case C.TypeRandomAddr:
+		outbound.RandomAddrOptions.DialerOptions = newDialer
+	default:
+	}
+}
+
+func copyDialerOptions(dialer *option.DialerOptions) option.DialerOptions {
+	newDialer := option.DialerOptions{
+		Detour:             dialer.Detour,
+		BindInterface:      dialer.BindInterface,
+		ProtectPath:        dialer.ProtectPath,
+		RoutingMark:        dialer.RoutingMark,
+		ReuseAddr:          dialer.ReuseAddr,
+		ConnectTimeout:     dialer.ConnectTimeout,
+		TCPFastOpen:        dialer.TCPFastOpen,
+		TCPMultiPath:       dialer.TCPMultiPath,
+		UDPFragmentDefault: dialer.UDPFragmentDefault,
+		DomainStrategy:     dialer.DomainStrategy,
+		FallbackDelay:      dialer.FallbackDelay,
+	}
+	if dialer.Inet4BindAddress != nil {
+		newDialer.Inet4BindAddress = new(option.ListenAddress)
+		*newDialer.Inet4BindAddress = *dialer.Inet4BindAddress
+	}
+	if dialer.Inet6BindAddress != nil {
+		newDialer.Inet6BindAddress = new(option.ListenAddress)
+		*newDialer.Inet6BindAddress = *dialer.Inet6BindAddress
+	}
+	if dialer.UDPFragment != nil {
+		newDialer.UDPFragment = new(bool)
+		*newDialer.UDPFragment = *dialer.UDPFragment
+	}
+	return newDialer
 }
