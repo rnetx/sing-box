@@ -52,7 +52,7 @@ func (c *ClashTUIC) GenerateOptions() (*option.Outbound, error) {
 			UDPRelayMode:      c.UdpRelayMode,
 			UDPOverStream:     c.UDPOverStream,
 			ZeroRTTHandshake:  c.ReduceRtt,
-			Heartbeat:         option.Duration(c.HeartbeatInterval),
+			Heartbeat:         option.Duration(1000000 * c.HeartbeatInterval),
 		},
 	}
 
