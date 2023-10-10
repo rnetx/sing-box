@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	berty.tech/go-libtor v1.0.385
-	github.com/Dreamacro/clash v1.17.0
 	github.com/caddyserver/certmagic v0.19.2
 	github.com/cloudflare/circl v1.3.3
 	github.com/cretz/bine v0.2.0
@@ -21,20 +20,20 @@ require (
 	github.com/miekg/dns v1.1.56
 	github.com/ooni/go-libtor v1.1.8
 	github.com/oschwald/maxminddb-golang v1.12.0
-	github.com/pires/go-proxyproto v0.7.0
+	github.com/sagernet/bbolt v0.0.0-20231008142710-b2d6e2f20458
 	github.com/sagernet/cloudflare-tls v0.0.0-20230829051644-4a68352d0c4a
 	github.com/sagernet/gomobile v0.0.0-20230915142329-c6740b6d2950
-	github.com/sagernet/gvisor v0.0.0-20230627031050-1ab0276e0dd2
-	github.com/sagernet/quic-go v0.0.0-20230919101909-0cc6c5dcecee
+	github.com/sagernet/gvisor v0.0.0-20230930141345-5fef6f2e17ab
+	github.com/sagernet/quic-go v0.0.0-20231008035953-32727fef9460
 	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691
-	github.com/sagernet/sing v0.2.12-0.20230925124400-0531fd63eaba
-	github.com/sagernet/sing-dns v0.1.10-0.20230921024525-fc3e4c051ccd
+	github.com/sagernet/sing v0.2.14-0.20231008040725-e690cb9a7ad2
+	github.com/sagernet/sing-dns v0.1.10
 	github.com/sagernet/sing-mux v0.1.3
-	github.com/sagernet/sing-quic v0.1.1-0.20230922040527-541e66a4a16d
+	github.com/sagernet/sing-quic v0.1.3-0.20231008043106-a107947d1ed5
 	github.com/sagernet/sing-shadowsocks v0.2.5
 	github.com/sagernet/sing-shadowsocks2 v0.1.4
 	github.com/sagernet/sing-shadowtls v0.1.4
-	github.com/sagernet/sing-tun v0.1.13-0.20230925091515-8adce0ea02a9
+	github.com/sagernet/sing-tun v0.1.16-0.20231006112722-19cc8b9e81aa
 	github.com/sagernet/sing-vmess v0.1.8
 	github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37
 	github.com/sagernet/tfo-go v0.0.0-20230816093905-5a5c285d44a6
@@ -43,15 +42,14 @@ require (
 	github.com/sagernet/wireguard-go v0.0.0-20230807125731-5d4a7ef2dc5f
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
-	go.etcd.io/bbolt v1.3.7
 	go.uber.org/zap v1.26.0
 	go4.org/netipx v0.0.0-20230824141953-6213f710f925
-	golang.org/x/crypto v0.13.0
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
-	golang.org/x/net v0.15.0
-	golang.org/x/sys v0.12.0
+	golang.org/x/crypto v0.14.0
+	golang.org/x/exp v0.0.0-20231005195138-3e424a577f31
+	golang.org/x/net v0.16.0
+	golang.org/x/sys v0.13.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
-	google.golang.org/grpc v1.58.1
+	google.golang.org/grpc v1.58.2
 	google.golang.org/protobuf v1.31.0
 	howett.net/plist v1.0.0
 )
@@ -62,8 +60,8 @@ require (
 )
 
 //replace github.com/sagernet/sing => ../sing
+
 require (
-	github.com/Dreamacro/protobytes v0.0.0-20230617041236-6500a9f4f158 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

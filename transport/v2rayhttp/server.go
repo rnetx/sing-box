@@ -55,16 +55,13 @@ func NewServer(ctx context.Context, options option.V2RayHTTPOptions, tlsConfig t
 		host:    options.Host,
 		path:    options.Path,
 		method:  options.Method,
-		headers: make(http.Header),
+		headers: options.Headers.Build(),
 	}
 	if server.method == "" {
 		server.method = "PUT"
 	}
 	if !strings.HasPrefix(server.path, "/") {
 		server.path = "/" + server.path
-	}
-	for key, value := range options.Headers {
-		server.headers[key] = value
 	}
 	server.httpServer = &http.Server{
 		Handler:           server,
@@ -85,15 +82,15 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 	host := request.Host
 	if len(s.host) > 0 && !common.Contains(s.host, host) {
-		s.fallbackRequest(request.Context(), writer, request, http.StatusBadRequest, E.New("bad host: ", host))
+		s.invalidRequest(writer, request, http.StatusBadRequest, E.New("bad host: ", host))
 		return
 	}
 	if !strings.HasPrefix(request.URL.Path, s.path) {
-		s.fallbackRequest(request.Context(), writer, request, http.StatusNotFound, E.New("bad path: ", request.URL.Path))
+		s.invalidRequest(writer, request, http.StatusNotFound, E.New("bad path: ", request.URL.Path))
 		return
 	}
 	if request.Method != s.method {
-		s.fallbackRequest(request.Context(), writer, request, http.StatusNotFound, E.New("bad method: ", request.Method))
+		s.invalidRequest(writer, request, http.StatusNotFound, E.New("bad method: ", request.Method))
 		return
 	}
 
@@ -113,7 +110,7 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 			requestBody = buf.NewSize(contentLength)
 			_, err := requestBody.ReadFullFrom(request.Body, contentLength)
 			if err != nil {
-				s.fallbackRequest(request.Context(), writer, request, 0, E.Cause(err, "read request"))
+				s.invalidRequest(writer, request, 0, E.Cause(err, "read request"))
 				return
 			}
 		}
@@ -121,14 +118,15 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		writer.(http.Flusher).Flush()
 		conn, reader, err := h.Hijack()
 		if err != nil {
-			s.fallbackRequest(request.Context(), writer, request, 0, E.Cause(err, "hijack conn"))
+			s.invalidRequest(writer, request, 0, E.Cause(err, "hijack conn"))
 			return
 		}
 		if cacheLen := reader.Reader.Buffered(); cacheLen > 0 {
 			cache := buf.NewSize(cacheLen)
 			_, err = cache.ReadFullFrom(reader.Reader, cacheLen)
 			if err != nil {
-				s.fallbackRequest(request.Context(), writer, request, 0, E.Cause(err, "read cache"))
+				conn.Close()
+				s.invalidRequest(writer, request, 0, E.Cause(err, "read cache"))
 				return
 			}
 			conn = bufio.NewCachedConn(conn, cache)
@@ -148,18 +146,11 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func (s *Server) fallbackRequest(ctx context.Context, writer http.ResponseWriter, request *http.Request, statusCode int, err error) {
-	conn := NewHTTPConn(request.Body, writer)
-	fErr := s.handler.FallbackConnection(ctx, &conn, M.Metadata{})
-	if fErr == nil {
-		return
-	} else if fErr == os.ErrInvalid {
-		fErr = nil
-	}
+func (s *Server) invalidRequest(writer http.ResponseWriter, request *http.Request, statusCode int, err error) {
 	if statusCode > 0 {
 		writer.WriteHeader(statusCode)
 	}
-	s.handler.NewError(request.Context(), E.Cause(E.Errors(err, E.Cause(fErr, "fallback connection")), "process connection from ", request.RemoteAddr))
+	s.handler.NewError(request.Context(), E.Cause(err, "process connection from ", request.RemoteAddr))
 }
 
 func (s *Server) Serve(listener net.Listener) error {

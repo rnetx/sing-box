@@ -1,3 +1,93 @@
+#### 1.6.0-alpha.4
+
+* Add `brutal_debug` option for Hysteria2
+* Fixes and improvements
+
+#### 1.5.2
+
+* Our [Apple tvOS client](/installation/clients/sft) is now available in the App Store 🍎
+* Fixes and improvements
+
+#### 1.6.0-alpha.3
+
+* Fixes and improvements
+
+#### 1.6.0-alpha.2
+
+* Fixes and improvements
+
+#### 1.5.1
+
+* Fixes and improvements
+
+#### 1.6.0-alpha.1
+
+* Update BBR congestion control for TUIC and Hysteria2 **1**
+* Update quic-go to v0.39.0
+* Update gVisor to 20230814.0
+* Remove [Deprecated Features](/deprecated) by agreement
+* Fixes and improvements
+
+**1**:
+
+None of the existing Golang BBR congestion control implementations have been reviewed or unit tested.
+This update is intended to address the multi-send defects of the old implementation and may introduce new issues.
+
+#### 1.5.0
+
+* Fixes and improvements
+
+Important changes since 1.4:
+
+* Add TLS [ECH server](/configuration/shared/tls) support
+* Improve TLS TCH client configuration
+* Add TLS ECH key pair generator **1**
+* Add TLS ECH support for QUIC based protocols **2**
+* Add KDE support for the `set_system_proxy` option in HTTP inbound
+* Add Hysteria2 protocol support **3**
+* Add `interrupt_exist_connections` option for `Selector` and `URLTest` outbounds **4**
+* Add DNS01 challenge support for ACME TLS certificate issuer **5**
+* Add `merge` command **6**
+* Mark [Deprecated Features](/deprecated)
+
+**1**:
+
+Command: `sing-box generate ech-keypair <plain_server_name> [--pq-signature-schemes-enabled]`
+
+**2**:
+
+All inbounds and outbounds are supported, including `Naiveproxy`, `Hysteria[/2]`, `TUIC` and `V2ray QUIC transport`.
+
+**3**:
+
+See [Hysteria2 inbound](/configuration/inbound/hysteria2) and [Hysteria2 outbound](/configuration/outbound/hysteria2)
+
+For protocol description, please refer to [https://v2.hysteria.network](https://v2.hysteria.network)
+
+**4**:
+
+Interrupt existing connections when the selected outbound has changed.
+
+Only inbound connections are affected by this setting, internal connections will always be interrupted.
+
+**5**:
+
+Only `Alibaba Cloud DNS` and `Cloudflare` are supported, see [ACME Fields](/configuration/shared/tls#acme-fields)
+and [DNS01 Challenge Fields](/configuration/shared/dns01_challenge).
+
+**6**:
+
+This command also parses path resources that appear in the configuration file and replaces them with embedded
+configuration, such as TLS certificates or SSH private keys.
+
+#### 1.5.0-rc.6
+
+* Fixes and improvements
+
+#### 1.4.6
+
+* Fixes and improvements
+
 #### 1.5.0-rc.5
 
 * Fixed an improper authentication vulnerability in the SOCKS5 inbound
@@ -127,7 +217,7 @@ For protocol description, please refer to [https://v2.hysteria.network](https://
 
 **1**:
 
-Command: `sing-box generate ech-keypair <plain_server_name> [-pq-signature-schemes-enabled]`
+Command: `sing-box generate ech-keypair <plain_server_name> [--pq-signature-schemes-enabled]`
 
 **2**:
 
