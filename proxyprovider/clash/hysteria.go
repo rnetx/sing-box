@@ -118,12 +118,6 @@ func (c *ClashHysteria) GenerateOptions() (*option.Outbound, error) {
 	if c.ALPN != nil && len(c.ALPN) > 0 {
 		tlsOptions.ALPN = c.ALPN
 	}
-	if c.ClientFingerprint != "" {
-		tlsOptions.UTLS = &option.OutboundUTLSOptions{
-			Enabled:     true,
-			Fingerprint: c.ClientFingerprint,
-		}
-	}
 
 	var ca string
 	if c.CAStr != "" {
