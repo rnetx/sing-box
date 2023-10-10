@@ -63,6 +63,7 @@ func (r *Router) prepareGeoIPDatabase() error {
 			os.Remove(geoPath)
 		}
 	}
+	r.geoIPPath = geoPath
 	if !rw.FileExists(geoPath) {
 		r.logger.Warn("geoip database not exists: ", geoPath)
 		var err error
@@ -109,6 +110,7 @@ func (r *Router) prepareGeositeDatabase() error {
 			os.Remove(geoPath)
 		}
 	}
+	r.geositePath = geoPath
 	if !rw.FileExists(geoPath) {
 		r.logger.Warn("geosite database not exists: ", geoPath)
 		var err error
@@ -135,6 +137,11 @@ func (r *Router) prepareGeositeDatabase() error {
 }
 
 func (r *Router) loopUpdateGeoIPDatabase() {
+	if stat, err := os.Stat(r.geoIPPath); err == nil {
+		if time.Since(stat.ModTime()) > time.Duration(r.geoIPOptions.AutoUpdateInterval) {
+			r.updateGeoIPDatabase()
+		}
+	}
 	ticker := time.NewTicker(time.Duration(r.geoIPOptions.AutoUpdateInterval))
 	defer ticker.Stop()
 	for {
@@ -153,19 +160,7 @@ func (r *Router) updateGeoIPDatabase() {
 	}
 	defer r.geoIPUpdateLock.Unlock()
 	r.logger.Info("try to update geoip database...")
-	var geoPath string
-	if r.geoIPOptions.Path != "" {
-		geoPath = r.geoIPOptions.Path
-	} else {
-		geoPath = "geoIP.db"
-		if foundPath, loaded := C.FindPath(geoPath); loaded {
-			geoPath = foundPath
-		}
-	}
-	if !rw.FileExists(geoPath) {
-		geoPath = filemanager.BasePath(r.ctx, geoPath)
-	}
-	tempGeoPath := geoPath + ".tmp"
+	tempGeoPath := r.geoIPPath + ".tmp"
 	os.Remove(tempGeoPath)
 	err := r.downloadGeoIPDatabase(tempGeoPath)
 	if err != nil {
@@ -179,7 +174,7 @@ func (r *Router) updateGeoIPDatabase() {
 		os.Remove(tempGeoPath)
 		return
 	}
-	err = os.Rename(tempGeoPath, geoPath)
+	err = os.Rename(tempGeoPath, r.geoIPPath)
 	if err != nil {
 		r.logger.Error("save geoip database failed: ", err)
 		os.Remove(tempGeoPath)
@@ -191,6 +186,11 @@ func (r *Router) updateGeoIPDatabase() {
 }
 
 func (r *Router) loopUpdateGeositeDatabase() {
+	if stat, err := os.Stat(r.geositePath); err == nil {
+		if time.Since(stat.ModTime()) > time.Duration(r.geositeOptions.AutoUpdateInterval) {
+			r.updateGeositeDatabase()
+		}
+	}
 	ticker := time.NewTicker(time.Duration(r.geositeOptions.AutoUpdateInterval))
 	defer ticker.Stop()
 	for {
@@ -209,19 +209,7 @@ func (r *Router) updateGeositeDatabase() {
 	}
 	defer r.geositeUpdateLock.Unlock()
 	r.logger.Info("try to update geosite database...")
-	var geoPath string
-	if r.geositeOptions.Path != "" {
-		geoPath = r.geositeOptions.Path
-	} else {
-		geoPath = "geosite.db"
-		if foundPath, loaded := C.FindPath(geoPath); loaded {
-			geoPath = foundPath
-		}
-	}
-	if !rw.FileExists(geoPath) {
-		geoPath = filemanager.BasePath(r.ctx, geoPath)
-	}
-	tempGeoPath := geoPath + ".tmp"
+	tempGeoPath := r.geositePath + ".tmp"
 	os.Remove(tempGeoPath)
 	err := r.downloadGeositeDatabase(tempGeoPath)
 	if err != nil {
@@ -255,7 +243,7 @@ func (r *Router) updateGeositeDatabase() {
 	}
 	r.geositeCache = nil
 	r.geositeReader = nil
-	err = os.Rename(tempGeoPath, geoPath)
+	err = os.Rename(tempGeoPath, r.geositePath)
 	if err != nil {
 		r.logger.Error("save geosite database failed: ", err)
 		os.Remove(tempGeoPath)
@@ -265,17 +253,14 @@ func (r *Router) updateGeositeDatabase() {
 }
 
 func (r *Router) UpdateGeoDatabase() {
-	if r.geoUpdateLock == nil {
-		return
-	}
 	if !r.geoUpdateLock.TryLock() {
 		return
 	}
 	defer r.geoUpdateLock.Unlock()
-	if r.geositeUpdateLock != nil {
+	if r.needGeositeDatabase {
 		r.updateGeositeDatabase()
 	}
-	if r.geoIPUpdateLock != nil {
+	if r.needGeoIPDatabase {
 		r.updateGeoIPDatabase()
 	}
 }

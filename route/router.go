@@ -69,9 +69,11 @@ type Router struct {
 	geoIPReader                        *geoip.Reader
 	geositeReader                      *geosite.Reader
 	geositeCache                       map[string]adapter.Rule
-	geositeUpdateLock                  *sync.Mutex
-	geoIPUpdateLock                    *sync.Mutex
-	geoUpdateLock                      *sync.Mutex
+	geositeUpdateLock                  sync.Mutex
+	geoIPUpdateLock                    sync.Mutex
+	geositePath                        string
+	geoIPPath                          string
+	geoUpdateLock                      sync.Mutex
 	dnsClient                          *dns.Client
 	defaultDomainStrategy              dns.DomainStrategy
 	dnsRules                           []adapter.DNSRule
@@ -450,7 +452,6 @@ func (r *Router) Start() error {
 			return err
 		}
 		if r.geoIPOptions.AutoUpdateInterval > 0 {
-			r.geoIPUpdateLock = &sync.Mutex{}
 			go r.loopUpdateGeoIPDatabase()
 			r.logger.Info("geoip database auto update enabled")
 		}
@@ -461,13 +462,9 @@ func (r *Router) Start() error {
 			return err
 		}
 		if r.geositeOptions.AutoUpdateInterval > 0 {
-			r.geositeUpdateLock = &sync.Mutex{}
 			go r.loopUpdateGeositeDatabase()
 			r.logger.Info("geosite database auto update enabled")
 		}
-	}
-	if r.needGeositeDatabase || r.needGeoIPDatabase {
-		r.geoUpdateLock = &sync.Mutex{}
 	}
 	if r.interfaceMonitor != nil {
 		err := r.interfaceMonitor.Start()
