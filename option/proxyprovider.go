@@ -13,6 +13,7 @@ type ProxyProvider struct {
 	CacheFile      string               `json:"cache_file,omitempty"`
 	UpdateInterval Duration             `json:"update_interval,omitempty"`
 	RequestTimeout Duration             `json:"request_timeout,omitempty"`
+	UseH3          bool                 `json:"use_h3,omitempty"`
 	DNS            string               `json:"dns,omitempty"`
 	TagFormat      string               `json:"tag_format,omitempty"`
 	GlobalFilter   *ProxyProviderFilter `json:"global_filter,omitempty"`

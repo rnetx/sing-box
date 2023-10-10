@@ -4,18 +4,22 @@ package proxyprovider
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/sagernet/quic-go"
+	"github.com/sagernet/quic-go/http3"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/simpledns"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
@@ -32,6 +36,7 @@ type ProxyProvider struct {
 
 	url            string
 	ua             string
+	useH3          bool
 	cacheFile      string
 	updateInterval time.Duration
 	requestTimeout time.Duration
@@ -79,6 +84,7 @@ func NewProxyProvider(ctx context.Context, router adapter.Router, logger log.Con
 		tag:            tag,
 		url:            options.Url,
 		ua:             options.UserAgent,
+		useH3:          options.UseH3,
 		cacheFile:      options.CacheFile,
 		dns:            options.DNS,
 		dialer:         options.Dialer,
@@ -340,54 +346,118 @@ func (p *ProxyProvider) update(ctx context.Context, isFirst bool) {
 func (p *ProxyProvider) wrapUpdate(ctx context.Context, isFirst bool) (*Cache, error) {
 	var httpClient *http.Client
 	if isFirst {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					if p.dns != "" {
-						host, _, err := net.SplitHostPort(addr)
-						if err != nil {
-							return nil, err
+		if !p.useH3 {
+			httpClient = &http.Client{
+				Transport: &http.Transport{
+					DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+						if p.dns != "" {
+							host, _, err := net.SplitHostPort(addr)
+							if err != nil {
+								return nil, err
+							}
+							ips, err := simpledns.DNSLookup(ctx, p.requestDialer, p.dns, host, true, true)
+							if err != nil {
+								return nil, err
+							}
+							return N.DialParallel(ctx, p.requestDialer, network, M.ParseSocksaddr(addr), ips, false, 5*time.Second)
+						} else {
+							return p.requestDialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
 						}
-						ips, err := simpledns.DNSLookup(ctx, p.requestDialer, p.dns, host, true, true)
-						if err != nil {
-							return nil, err
-						}
-						return N.DialParallel(ctx, p.requestDialer, network, M.ParseSocksaddr(addr), ips, false, 5*time.Second)
-					} else {
-						return p.requestDialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
-					}
+					},
+					ForceAttemptHTTP2: true,
 				},
-				ForceAttemptHTTP2: true,
-			},
+			}
+		} else {
+			httpClient = &http.Client{
+				Transport: &http3.RoundTripper{
+					Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+						var conn net.Conn
+						var err error
+						if p.dns != "" {
+							host, _, err := net.SplitHostPort(addr)
+							if err != nil {
+								return nil, err
+							}
+							ips, err := simpledns.DNSLookup(ctx, p.requestDialer, p.dns, host, true, true)
+							if err != nil {
+								return nil, err
+							}
+							conn, err = N.DialParallel(ctx, p.requestDialer, N.NetworkUDP, M.ParseSocksaddr(addr), ips, false, 5*time.Second)
+						} else {
+							conn, err = p.requestDialer.DialContext(ctx, N.NetworkUDP, M.ParseSocksaddr(addr))
+						}
+						if err != nil {
+							return nil, err
+						}
+						return quic.DialEarly(ctx, bufio.NewUnbindPacketConn(conn), conn.RemoteAddr(), tlsCfg, cfg)
+					},
+				},
+			}
 		}
 	} else if p.httpClient == nil {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					dialer := p.requestDialer
-					if p.runningDetour != "" {
-						var loaded bool
-						dialer, loaded = p.router.Outbound(p.runningDetour)
-						if !loaded {
-							return nil, E.New("running detour not found")
+		if !p.useH3 {
+			httpClient = &http.Client{
+				Transport: &http.Transport{
+					DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+						dialer := p.requestDialer
+						if p.runningDetour != "" {
+							var loaded bool
+							dialer, loaded = p.router.Outbound(p.runningDetour)
+							if !loaded {
+								return nil, E.New("running detour not found")
+							}
 						}
-					}
-					if p.dns != "" {
-						host, _, err := net.SplitHostPort(addr)
-						if err != nil {
-							return nil, err
+						if p.dns != "" {
+							host, _, err := net.SplitHostPort(addr)
+							if err != nil {
+								return nil, err
+							}
+							ips, err := simpledns.DNSLookup(ctx, dialer, p.dns, host, true, true)
+							if err != nil {
+								return nil, err
+							}
+							return N.DialParallel(ctx, dialer, network, M.ParseSocksaddr(addr), ips, false, 5*time.Second)
+						} else {
+							return dialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
 						}
-						ips, err := simpledns.DNSLookup(ctx, dialer, p.dns, host, true, true)
-						if err != nil {
-							return nil, err
-						}
-						return N.DialParallel(ctx, dialer, network, M.ParseSocksaddr(addr), ips, false, 5*time.Second)
-					} else {
-						return dialer.DialContext(ctx, network, M.ParseSocksaddr(addr))
-					}
+					},
+					ForceAttemptHTTP2: true,
 				},
-				ForceAttemptHTTP2: true,
-			},
+			}
+		} else {
+			httpClient = &http.Client{
+				Transport: &http3.RoundTripper{
+					Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+						var conn net.Conn
+						var err error
+						dialer := p.requestDialer
+						if p.runningDetour != "" {
+							var loaded bool
+							dialer, loaded = p.router.Outbound(p.runningDetour)
+							if !loaded {
+								return nil, E.New("running detour not found")
+							}
+						}
+						if p.dns != "" {
+							host, _, err := net.SplitHostPort(addr)
+							if err != nil {
+								return nil, err
+							}
+							ips, err := simpledns.DNSLookup(ctx, dialer, p.dns, host, true, true)
+							if err != nil {
+								return nil, err
+							}
+							conn, err = N.DialParallel(ctx, dialer, N.NetworkUDP, M.ParseSocksaddr(addr), ips, false, 5*time.Second)
+						} else {
+							conn, err = dialer.DialContext(ctx, N.NetworkUDP, M.ParseSocksaddr(addr))
+						}
+						if err != nil {
+							return nil, err
+						}
+						return quic.DialEarly(ctx, bufio.NewUnbindPacketConn(conn), conn.RemoteAddr(), tlsCfg, cfg)
+					},
+				},
+			}
 		}
 		p.httpClient = httpClient
 	} else {

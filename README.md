@@ -48,6 +48,7 @@ with this application without prior consent.
             "cache_file": "/tmp/proxy-provider-x.cache", // 缓存文件，选填，强烈建议填写，可以加快启动速度
             "update_interval": "4h", // 更新间隔，选填，仅填写 cache_file 有效，若当前缓存文件已经超过该时间，将会进行后台自动更新
             "request_timeout": "10s", // 请求超时时间
+            "use_h3": false, // 使用 HTTP/3 请求订阅
             "dns": "tls://223.5.5.5", // 使用自定义 DNS 请求订阅域名
             "tag_format": "proxy-provider - %s", // 如果有多个订阅并且订阅间存在重名节点，可以尝试使用，其中 %s 为占位符，会被替换为原节点名。比如：原节点名："HongKong 01"，tag_format设置为 "PP - %s"，替换后新节点名会更变为 "PP - HongKong 01"，以解决节点名冲突的问题
             "global_filter": {
@@ -132,7 +133,8 @@ https://[2606:4700:4700::1111]:443/dns-query?sni=cloudflare-dns.com
             "tag": "rule-provider-x", // 标签，必填，用于区别不同的 rule-provider，不可重复
             "url": "", // 规则订阅链接，必填，仅支持Clash订阅规则
             "behavior": "", // 规则类型，必填，可选 domain / ipcidr / classical
-            "format": "". // 规则格式，选填，可选 yaml / text，默认 yaml
+            "format": "", // 规则格式，选填，可选 yaml / text，默认 yaml
+            "use_h3": false, // 使用 HTTP/3 请求规则订阅
             "cache_file": "/tmp/rule-provider-x.cache", // 缓存文件，选填，强烈建议填写，可以加快启动速度
             "update_interval": "4h", // 更新间隔，选填，仅填写 cache_file 有效，若当前缓存文件已经超过该时间，将会进行后台自动更新
             "request_timeout": "10s", // 请求超时时间
