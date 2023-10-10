@@ -166,6 +166,7 @@ func (r *Router) updateGeoIPDatabase() {
 		geoPath = filemanager.BasePath(r.ctx, geoPath)
 	}
 	tempGeoPath := geoPath + ".tmp"
+	os.Remove(tempGeoPath)
 	err := r.downloadGeoIPDatabase(tempGeoPath)
 	if err != nil {
 		r.logger.Error("download geoip database failed: ", err)
@@ -219,6 +220,7 @@ func (r *Router) updateGeositeDatabase() {
 		geoPath = filemanager.BasePath(r.ctx, geoPath)
 	}
 	tempGeoPath := geoPath + ".tmp"
+	os.Remove(tempGeoPath)
 	err := r.downloadGeositeDatabase(tempGeoPath)
 	if err != nil {
 		r.logger.Error("download geosite database failed: ", err)
@@ -267,10 +269,10 @@ func (r *Router) UpdateGeoDatabase() {
 		return
 	}
 	defer r.geoUpdateLock.Unlock()
-	if r.needGeositeDatabase {
+	if r.geositeUpdateLock != nil {
 		r.updateGeositeDatabase()
 	}
-	if r.needGeoIPDatabase {
+	if r.geoIPUpdateLock != nil {
 		r.updateGeoIPDatabase()
 	}
 }
