@@ -20,11 +20,11 @@ func ParseSingboxConfig(raw []byte) ([]option.Outbound, error) {
 	for _, outboundOptions := range outboundConfig.Outbounds {
 		switch outboundOptions.Type {
 		// TODO: Remove Direct ???
-		case C.TypeDirect, C.TypeBlock, C.TypeDNS, C.TypeURLTest, C.TypeSelector:
+		case C.TypeBlock, C.TypeDNS, C.TypeURLTest, C.TypeSelector:
 			continue
 		default:
 			// TODO: Remove Detour ???
-			removeDetour(&outboundOptions)
+			// removeDetour(&outboundOptions)
 			options = append(options, outboundOptions)
 		}
 	}
