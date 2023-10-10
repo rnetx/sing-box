@@ -125,6 +125,7 @@ func (r *ClashBasicRule) insertDomainRule(rule string) error {
 		return fmt.Errorf("invalid rule: %s", rule)
 	default:
 		r.Domain = append(r.Domain, rule)
+		r.DomainSuffix = append(r.DomainSuffix, rule)
 	}
 	return nil
 }
