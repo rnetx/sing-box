@@ -31,6 +31,7 @@ type ProxyProvider struct {
 	tag    string
 
 	url            string
+	ua             string
 	cacheFile      string
 	updateInterval time.Duration
 	requestTimeout time.Duration
@@ -59,6 +60,9 @@ func NewProxyProvider(ctx context.Context, router adapter.Router, logger log.Con
 	if options.Url == "" {
 		return nil, E.New("url is empty")
 	}
+	if options.UserAgent == "" {
+		options.UserAgent = "clash.meta; sing-box"
+	}
 	var globalFilter *Filter
 	if options.GlobalFilter != nil {
 		var err error
@@ -74,6 +78,7 @@ func NewProxyProvider(ctx context.Context, router adapter.Router, logger log.Con
 		//
 		tag:            tag,
 		url:            options.Url,
+		ua:             options.UserAgent,
 		cacheFile:      options.CacheFile,
 		dns:            options.DNS,
 		dialer:         options.Dialer,
@@ -393,7 +398,7 @@ func (p *ProxyProvider) wrapUpdate(ctx context.Context, isFirst bool) (*Cache, e
 		ctx, cancel = context.WithTimeout(ctx, p.requestTimeout)
 		defer cancel()
 	}
-	cache, err := request(ctx, httpClient, p.url)
+	cache, err := request(ctx, httpClient, p.url, p.ua)
 	if err != nil {
 		return nil, err
 	}

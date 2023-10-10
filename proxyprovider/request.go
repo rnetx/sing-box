@@ -16,12 +16,12 @@ import (
 	"github.com/sagernet/sing-box/proxyprovider/singbox"
 )
 
-func request(ctx context.Context, httpClient *http.Client, url string) (*Cache, error) {
+func request(ctx context.Context, httpClient *http.Client, url string, ua string) (*Cache, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "clash.meta; sing-box")
+	req.Header.Set("User-Agent", ua)
 
 	req = req.WithContext(ctx)
 	resp, err := httpClient.Do(req)

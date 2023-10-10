@@ -9,6 +9,7 @@ import (
 type ProxyProvider struct {
 	Tag            string               `json:"tag"`
 	Url            string               `json:"url"`
+	UserAgent      string               `json:"download_ua,omitempty"`
 	CacheFile      string               `json:"cache_file,omitempty"`
 	UpdateInterval Duration             `json:"update_interval,omitempty"`
 	RequestTimeout Duration             `json:"request_timeout,omitempty"`
