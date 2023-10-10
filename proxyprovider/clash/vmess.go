@@ -65,7 +65,7 @@ func (c *ClashVMess) GenerateOptions() (*option.Outbound, error) {
 	}
 
 	if c.UDP != nil && !*c.UDP {
-		outboundOptions.VMessOptions.Network = "tcp"
+		outboundOptions.VMessOptions.Network = option.NetworkList{"tcp"}
 	}
 
 	switch c.Network {

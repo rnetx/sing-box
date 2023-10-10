@@ -82,7 +82,7 @@ func (c *ClashShadowsocks) GenerateOptions() (*option.Outbound, error) {
 	}
 
 	if c.UDP != nil && !*c.UDP {
-		outboundOptions.ShadowsocksOptions.Network = "tcp"
+		outboundOptions.ShadowsocksOptions.Network = option.NetworkList{"tcp"}
 	}
 	if c.UDPOverTCP {
 		outboundOptions.ShadowsocksOptions.UDPOverTCPOptions = &option.UDPOverTCPOptions{

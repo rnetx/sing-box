@@ -52,7 +52,7 @@ func (c *ClashSocks) GenerateOptions() (*option.Outbound, error) {
 		return nil, errors.New("socks5 tls is not supported")
 	}
 	if c.UDP != nil && !*c.UDP {
-		outboundOptions.SocksOptions.Network = "tcp"
+		outboundOptions.SocksOptions.Network = option.NetworkList{"tcp"}
 	}
 
 	if c.TFO {

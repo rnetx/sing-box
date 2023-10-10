@@ -60,7 +60,7 @@ func (c *ClashTrojan) GenerateOptions() (*option.Outbound, error) {
 	}
 
 	if c.UDP != nil && !*c.UDP {
-		outboundOptions.TrojanOptions.Network = "tcp"
+		outboundOptions.TrojanOptions.Network = option.NetworkList{"tcp"}
 	}
 
 	tlsOptions := &option.OutboundTLSOptions{

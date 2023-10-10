@@ -66,7 +66,7 @@ func (c *ClashVLESS) GenerateOptions() (*option.Outbound, error) {
 	}
 
 	if c.UDP != nil && !*c.UDP {
-		outboundOptions.VLESSOptions.Network = "tcp"
+		outboundOptions.VLESSOptions.Network = option.NetworkList{"tcp"}
 	}
 
 	if c.PacketEncoding != nil {
