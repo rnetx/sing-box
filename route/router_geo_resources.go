@@ -173,14 +173,16 @@ func (r *Router) updateGeoIPDatabase() {
 		return
 	}
 	r.logger.Info("download geoip database success")
-	geoReader, codes, err := geoip.Open(geoPath)
+	geoReader, codes, err := geoip.Open(tempGeoPath)
 	if err != nil {
 		r.logger.Error(E.Cause(err, "open geoip database"))
+		os.Remove(tempGeoPath)
 		return
 	}
 	err = os.Rename(tempGeoPath, geoPath)
 	if err != nil {
 		r.logger.Error("save geoip database failed: ", err)
+		os.Remove(tempGeoPath)
 		return
 	}
 	r.logger.Info("loaded geoip database: ", len(codes), " codes")
@@ -227,14 +229,9 @@ func (r *Router) updateGeositeDatabase() {
 		return
 	}
 	r.logger.Info("download geosite database success")
-	geoReader, codes, err := geosite.Open(geoPath)
+	geoReader, codes, err := geosite.Open(tempGeoPath)
 	if err != nil {
 		r.logger.Error(E.Cause(err, "open geosite database"))
-		return
-	}
-	err = os.Rename(tempGeoPath, geoPath)
-	if err != nil {
-		r.logger.Error("save geosite database failed: ", err)
 		return
 	}
 	r.logger.Info("loaded geosite database: ", len(codes), " codes")
@@ -258,6 +255,12 @@ func (r *Router) updateGeositeDatabase() {
 	}
 	r.geositeCache = nil
 	r.geositeReader = nil
+	err = os.Rename(tempGeoPath, geoPath)
+	if err != nil {
+		r.logger.Error("save geosite database failed: ", err)
+		os.Remove(tempGeoPath)
+		return
+	}
 	r.logger.Info("reload geosite rules success")
 }
 
