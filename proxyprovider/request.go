@@ -3,6 +3,7 @@ package proxyprovider
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/proxyprovider/clash"
+	"github.com/sagernet/sing-box/proxyprovider/singbox"
 )
 
 func request(ctx context.Context, httpClient *http.Client, url string) (*Cache, error) {
@@ -18,7 +20,7 @@ func request(ctx context.Context, httpClient *http.Client, url string) (*Cache, 
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "clash.meta")
+	req.Header.Set("User-Agent", "clash.meta; sing-box")
 
 	req = req.WithContext(ctx)
 	resp, err := httpClient.Do(req)
@@ -34,9 +36,14 @@ func request(ctx context.Context, httpClient *http.Client, url string) (*Cache, 
 	}
 	resp.Body.Close()
 
+	// Try Clash Config
 	outbounds, err := clash.ParseClashConfig(buffer.Bytes())
 	if err != nil {
-		return nil, err
+		// Try Singbox Config
+		outbounds, err = singbox.ParseSingboxConfig(buffer.Bytes())
+		if err != nil {
+			return nil, fmt.Errorf("parse config failed, config is not clash config or sing-box config")
+		}
 	}
 
 	var clashInfo ClashInfo
