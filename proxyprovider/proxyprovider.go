@@ -430,36 +430,35 @@ func setDialerOptions(outbound *option.Outbound, dialer *option.DialerOptions) {
 	newDialer := copyDialerOptions(dialer)
 	switch outbound.Type {
 	case C.TypeDirect:
-		outbound.DirectOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.DirectOptions.DialerOptions, &newDialer)
 	case C.TypeHTTP:
-		outbound.HTTPOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.HTTPOptions.DialerOptions, &newDialer)
 	case C.TypeShadowsocks:
-		outbound.ShadowsocksOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.ShadowsocksOptions.DialerOptions, &newDialer)
 	case C.TypeVMess:
-		outbound.VMessOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.VMessOptions.DialerOptions, &newDialer)
 	case C.TypeTrojan:
-		outbound.TrojanOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.TrojanOptions.DialerOptions, &newDialer)
 	case C.TypeWireGuard:
-		outbound.WireGuardOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.WireGuardOptions.DialerOptions, &newDialer)
 	case C.TypeHysteria:
-		outbound.HysteriaOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.HysteriaOptions.DialerOptions, &newDialer)
 	case C.TypeTor:
-		outbound.TorOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.TorOptions.DialerOptions, &newDialer)
 	case C.TypeSSH:
-		outbound.SSHOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.SSHOptions.DialerOptions, &newDialer)
 	case C.TypeShadowTLS:
-		outbound.ShadowTLSOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.ShadowTLSOptions.DialerOptions, &newDialer)
 	case C.TypeShadowsocksR:
-		outbound.ShadowsocksROptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.ShadowsocksROptions.DialerOptions, &newDialer)
 	case C.TypeVLESS:
-		outbound.VLESSOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.VLESSOptions.DialerOptions, &newDialer)
 	case C.TypeTUIC:
-		outbound.TUICOptions.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.TUICOptions.DialerOptions, &newDialer)
 	case C.TypeHysteria2:
-		outbound.Hysteria2Options.DialerOptions = newDialer
+		mergeDialerOptions(&outbound.Hysteria2Options.DialerOptions, &newDialer)
 	case C.TypeRandomAddr:
-		outbound.RandomAddrOptions.DialerOptions = newDialer
-	default:
+		mergeDialerOptions(&outbound.RandomAddrOptions.DialerOptions, &newDialer)
 	}
 }
 
@@ -490,4 +489,49 @@ func copyDialerOptions(dialer *option.DialerOptions) option.DialerOptions {
 		*newDialer.UDPFragment = *dialer.UDPFragment
 	}
 	return newDialer
+}
+
+func mergeDialerOptions(old, new *option.DialerOptions) {
+	if old == nil || new == nil {
+		return
+	}
+	if new.Detour != "" {
+		old.Detour = new.Detour
+	}
+	if new.BindInterface != "" {
+		old.BindInterface = new.BindInterface
+	}
+	if new.Inet4BindAddress != nil {
+		old.Inet4BindAddress = new.Inet4BindAddress
+	}
+	if new.Inet6BindAddress != nil {
+		old.Inet6BindAddress = new.Inet6BindAddress
+	}
+	if new.ProtectPath != "" {
+		old.ProtectPath = new.ProtectPath
+	}
+	if new.RoutingMark != 0 {
+		old.RoutingMark = new.RoutingMark
+	}
+	if new.ReuseAddr {
+		old.ReuseAddr = new.ReuseAddr
+	}
+	if new.ConnectTimeout > 0 {
+		old.ConnectTimeout = new.ConnectTimeout
+	}
+	if new.TCPFastOpen {
+		old.TCPFastOpen = new.TCPFastOpen
+	}
+	if new.TCPMultiPath {
+		old.TCPMultiPath = new.TCPMultiPath
+	}
+	if new.UDPFragment != nil {
+		old.UDPFragment = new.UDPFragment
+	}
+	if new.DomainStrategy != 0 {
+		old.DomainStrategy = new.DomainStrategy
+	}
+	if new.FallbackDelay > 0 {
+		old.FallbackDelay = new.FallbackDelay
+	}
 }
