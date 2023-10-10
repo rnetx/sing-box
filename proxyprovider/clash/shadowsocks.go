@@ -11,6 +11,7 @@ import (
 
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/proxyprovider/utils"
 )
 
 type ClashShadowsocks struct {
@@ -50,7 +51,7 @@ func (c *ClashShadowsocks) GenerateOptions() (*option.Outbound, error) {
 			Password: c.Password,
 		},
 	}
-	if !checkShadowsocksMethod(c.Cipher) {
+	if !utils.CheckShadowsocksMethod(c.Cipher) {
 		return nil, fmt.Errorf("unsupported cipher: %s", c.Cipher)
 	}
 
@@ -120,31 +121,6 @@ func (c *ClashShadowsocks) GenerateOptions() (*option.Outbound, error) {
 	}
 
 	return outboundOptions, nil
-}
-
-func checkShadowsocksMethod(cipher string) bool {
-	switch cipher {
-	case "aes-128-gcm":
-	case "aes-192-gcm":
-	case "aes-256-gcm":
-	case "aes-128-cfb":
-	case "aes-192-cfb":
-	case "aes-256-cfb":
-	case "aes-128-ctr":
-	case "aes-192-ctr":
-	case "aes-256-ctr":
-	case "rc4-md5":
-	case "chacha20-ietf":
-	case "xchacha20":
-	case "chacha20-ietf-poly1305":
-	case "xchacha20-ietf-poly1305":
-	case "2022-blake3-aes-128-gcm":
-	case "2022-blake3-aes-256-gcm":
-	case "2022-blake3-chacha20-poly1305":
-	default:
-		return false
-	}
-	return true
 }
 
 func backslashEscape(s string, set []byte) string {

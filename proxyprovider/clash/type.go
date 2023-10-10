@@ -48,9 +48,6 @@ func (p *Port) UnmarshalYAML(node *yaml.Node) error {
 	if err3 != nil {
 		return err
 	}
-	if portUint64 == 0 || portUint64 > 0xffff {
-		return err
-	}
 	*p = Port(portUint64)
 	return nil
 }

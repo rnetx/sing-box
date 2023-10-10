@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/proxyprovider/clash"
+	"github.com/sagernet/sing-box/proxyprovider/raw"
 	"github.com/sagernet/sing-box/proxyprovider/singbox"
 )
 
@@ -39,10 +40,14 @@ func request(ctx context.Context, httpClient *http.Client, url string) (*Cache, 
 	// Try Clash Config
 	outbounds, err := clash.ParseClashConfig(buffer.Bytes())
 	if err != nil {
-		// Try Singbox Config
-		outbounds, err = singbox.ParseSingboxConfig(buffer.Bytes())
+		// Try Raw Config
+		outbounds, err = raw.ParseRawConfig(buffer.Bytes())
 		if err != nil {
-			return nil, fmt.Errorf("parse config failed, config is not clash config or sing-box config")
+			// Try Singbox Config
+			outbounds, err = singbox.ParseSingboxConfig(buffer.Bytes())
+			if err != nil {
+				return nil, fmt.Errorf("parse config failed, config is not clash config or raw links or sing-box config")
+			}
 		}
 	}
 
