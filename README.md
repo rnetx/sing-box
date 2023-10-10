@@ -44,7 +44,7 @@ with this application without prior consent.
     "proxyproviders": [
         {
             "tag": "proxy-provider-x", // 标签，必填，用于区别不同的 proxy-provider，不可重复，设置后outbounds会暴露一个同名的selector出站
-            "url": "", // 订阅链接，必填，支持Clash订阅链接，后续可能支持普通订阅链接
+            "url": "", // 订阅链接，必填，支持Clash订阅链接，支持普通分享链接，支持Sing-box订阅链接
             "cache_file": "/tmp/proxy-provider-x.cache", // 缓存文件，选填，强烈建议填写，可以加快启动速度
             "update_interval": "4h", // 更新间隔，选填，仅填写 cache_file 有效，若当前缓存文件已经超过该时间，将会进行后台自动更新
             "request_timeout": "10s", // 请求超时时间
@@ -266,3 +266,22 @@ NETWORK          ==> network
 }
 ```
 
+### Geo Resource 自动更新支持
+
+##### 用法
+```json5
+{
+    "route": {
+        "geosite": {
+            "path": "/temp/geosite.db",
+            "auto_update_interval": "12h" // 更新间隔，在程序运行时会间隔时间自动更新
+        },
+        "geoip": {
+            "path": "/temp/geoip.db",
+            "auto_update_interval": "12h"
+        }
+    }
+}
+```
+
+- 支持在 Clash API 中调用 API 更新 Geo Resource
