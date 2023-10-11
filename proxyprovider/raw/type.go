@@ -2,6 +2,7 @@ package raw
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 
 	"github.com/sagernet/sing-box/option"
@@ -19,10 +20,15 @@ func ParseRawConfig(raw []byte) ([]option.Outbound, error) {
 	rawStr := string(raw)
 	rawStr = strings.TrimSpace(rawStr)
 	_raw, err := base64.URLEncoding.DecodeString(rawStr)
-	if err == nil {
+	if err != nil {
+		return nil, err
+	} else {
 		rawStr = string(_raw)
 	}
 	rawList := strings.Split(rawStr, "\n")
+	if rawList == nil || len(rawList) == 0 {
+		return nil, fmt.Errorf("no peellists found in raw config")
+	}
 	var peerList []option.Outbound
 	for _, r := range rawList {
 		rs := string(r)
@@ -63,6 +69,9 @@ func ParseRawConfig(raw []byte) ([]option.Outbound, error) {
 			return nil, err
 		}
 		peerList = append(peerList, *peer.Options())
+		if peerList == nil || len(peerList) == 0 {
+			return nil, fmt.Errorf("no outbounds found in raw config")
+		}
 	}
 	return peerList, nil
 }

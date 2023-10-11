@@ -1,6 +1,8 @@
 package singbox
 
 import (
+	"fmt"
+
 	"github.com/sagernet/sing-box/common/json"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
@@ -16,6 +18,9 @@ func ParseSingboxConfig(raw []byte) ([]option.Outbound, error) {
 	if err != nil {
 		return nil, err
 	}
+	if outboundConfig.Outbounds == nil || len(outboundConfig.Outbounds) == 0 {
+		return nil, fmt.Errorf("no outbounds found in sing-box config")
+	}
 	var options []option.Outbound
 	for _, outboundOptions := range outboundConfig.Outbounds {
 		switch outboundOptions.Type {
@@ -27,6 +32,9 @@ func ParseSingboxConfig(raw []byte) ([]option.Outbound, error) {
 			// removeDetour(&outboundOptions)
 			options = append(options, outboundOptions)
 		}
+	}
+	if options == nil || len(options) == 0 {
+		return nil, fmt.Errorf("no outbounds found in sing-box config")
 	}
 	return options, nil
 }
