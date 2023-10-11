@@ -18,8 +18,6 @@ type RawInterface interface {
 func ParseRawConfig(raw []byte) ([]option.Outbound, error) {
 	rawStr := string(raw)
 	rawStr = strings.TrimSpace(rawStr)
-	rawStr = strings.ReplaceAll(rawStr, "\r", "")
-	rawStr = strings.ReplaceAll(rawStr, "\n", "")
 	_raw, err := base64.URLEncoding.DecodeString(rawStr)
 	if err == nil {
 		rawStr = string(_raw)
@@ -29,8 +27,6 @@ func ParseRawConfig(raw []byte) ([]option.Outbound, error) {
 	for _, r := range rawList {
 		rs := string(r)
 		rs = strings.TrimSpace(rs)
-		rs = strings.ReplaceAll(rs, "\r", "")
-		rs = strings.ReplaceAll(rs, "\n", "")
 		if rs == "" {
 			continue
 		}
