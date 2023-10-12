@@ -7,12 +7,14 @@ require (
 	github.com/caddyserver/certmagic v0.19.2
 	github.com/cloudflare/circl v1.3.3
 	github.com/cretz/bine v0.2.0
+	github.com/dlclark/regexp2 v1.10.0
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.3
 	github.com/gofrs/uuid/v5 v5.0.0
 	github.com/insomniacslk/dhcp v0.0.0-20230908212754-65c27093e38a
+	github.com/ipsn/go-libtor v1.0.380
 	github.com/libdns/alidns v1.0.3
 	github.com/libdns/cloudflare v0.1.0
 	github.com/logrusorgru/aurora v2.0.3+incompatible
@@ -26,10 +28,10 @@ require (
 	github.com/sagernet/gvisor v0.0.0-20230930141345-5fef6f2e17ab
 	github.com/sagernet/quic-go v0.0.0-20231008035953-32727fef9460
 	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691
-	github.com/sagernet/sing v0.2.14-0.20231008040725-e690cb9a7ad2
+	github.com/sagernet/sing v0.2.14-0.20231011041941-e4d9384bcd84
 	github.com/sagernet/sing-dns v0.1.10
 	github.com/sagernet/sing-mux v0.1.3
-	github.com/sagernet/sing-quic v0.1.3-0.20231008043106-a107947d1ed5
+	github.com/sagernet/sing-quic v0.1.3-0.20231011042217-13b8d0b8f74b
 	github.com/sagernet/sing-shadowsocks v0.2.5
 	github.com/sagernet/sing-shadowsocks2 v0.1.4
 	github.com/sagernet/sing-shadowtls v0.1.4
@@ -52,11 +54,6 @@ require (
 	google.golang.org/grpc v1.58.2
 	google.golang.org/protobuf v1.31.0
 	howett.net/plist v1.0.0
-)
-
-require (
-	github.com/dlclark/regexp2 v1.10.0 // indirect
-	github.com/ipsn/go-libtor v1.0.380 // indirect
 )
 
 //replace github.com/sagernet/sing => ../sing
