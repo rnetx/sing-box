@@ -131,7 +131,6 @@ func NewServer(ctx context.Context, router adapter.Router, logFactory log.Observ
 		r.Mount("/profile", profileRouter())
 		r.Mount("/cache", cacheRouter(router))
 		r.Mount("/dns", dnsRouter(router))
-		r.Post("/restart", restart(server))
 
 		server.setupMetaAPI(r)
 	})

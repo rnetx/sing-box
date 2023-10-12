@@ -96,6 +96,7 @@ type Router struct {
 	clashServer                        adapter.ClashServer
 	v2rayServer                        adapter.V2RayServer
 	platformInterface                  platform.Interface
+	reloadChan                         chan<- struct{}
 }
 
 func NewRouter(
@@ -106,6 +107,7 @@ func NewRouter(
 	ntpOptions option.NTPOptions,
 	inbounds []option.Inbound,
 	platformInterface platform.Interface,
+	reloadChan chan<- struct{},
 ) (*Router, error) {
 	router := &Router{
 		ctx:                   ctx,
@@ -126,6 +128,7 @@ func NewRouter(
 		defaultMark:           options.DefaultMark,
 		pauseManager:          pause.ManagerFromContext(ctx),
 		platformInterface:     platformInterface,
+		reloadChan:            reloadChan,
 	}
 	router.dnsClient = dns.NewClient(dns.ClientOptions{
 		DisableCache:     dnsOptions.DNSClientOptions.DisableCache,
@@ -1093,4 +1096,13 @@ func (r *Router) RuleProvider(tag string) (ruleProvider adapter.RuleProvider, lo
 		ruleProvider, loaded = r.ruleProviderByTag[tag]
 	}
 	return
+}
+
+func (r *Router) Reload() {
+	if r.platformInterface == nil {
+		select {
+		case r.reloadChan <- struct{}{}:
+		default:
+		}
+	}
 }
