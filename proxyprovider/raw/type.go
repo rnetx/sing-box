@@ -2,6 +2,7 @@ package raw
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 
 	"github.com/sagernet/sing-box/option"
@@ -24,7 +25,7 @@ func ParseRawConfig(raw []byte) ([]option.Outbound, error) {
 	}
 	rawList := strings.Split(rawStr, "\n")
 	var peerList []option.Outbound
-	for _, r := range rawList {
+	for i, r := range rawList {
 		rs := string(r)
 		rs = strings.TrimSpace(rs)
 		if rs == "" {
@@ -36,33 +37,36 @@ func ParseRawConfig(raw []byte) ([]option.Outbound, error) {
 		}
 		head := ss[0]
 		var peer RawInterface
-		switch {
-		case head == "http" || head == "https":
+		switch head {
+		case "http", "https":
 			peer = &HTTP{}
-		case head == "socks" || head == "socks4" || head == "socks4a" || head == "socks5" || head == "socks5h":
+		case "socks", "socks4", "socks4a", "socks5", "socks5h":
 			peer = &Socks{}
-		case head == "hysteria":
+		case "hysteria":
 			peer = &Hysteria{}
-		case head == "hy2" || head == "hysteria2":
+		case "hy2", "hysteria2":
 			peer = &Hysteria2{}
-		case head == "ss":
+		case "ss":
 			peer = &Shadowsocks{}
-		case head == "trojan":
+		case "trojan":
 			peer = &Trojan{}
-		case head == "vmess":
+		case "vmess":
 			peer = &VMess{}
-		case head == "vless":
+		case "vless":
 			peer = &VLESS{}
-		case head == "tuic":
+		case "tuic":
 			peer = &Tuic{}
 		default:
 			continue
 		}
 		err = peer.ParseLink(head + "://" + ss[1])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("parse proxy[%d] failed: %s", i+1, err)
 		}
 		peerList = append(peerList, *peer.Options())
+	}
+	if len(peerList) == 0 {
+		return nil, fmt.Errorf("no outbounds found in raw link")
 	}
 	return peerList, nil
 }

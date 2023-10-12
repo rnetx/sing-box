@@ -109,13 +109,13 @@ func ParseClashConfig(raw []byte) ([]option.Outbound, error) {
 		return nil, err
 	}
 	if config.Proxies == nil || len(config.Proxies) == 0 {
-		return nil, fmt.Errorf("no proxies found in clash config")
+		return nil, fmt.Errorf("no outbounds found in clash config")
 	}
 	m := make([]option.Outbound, 0, len(config.Proxies))
 	for i, proxy := range config.Proxies {
 		options, err := proxy.Proxy.GenerateOptions()
 		if err != nil {
-			return nil, fmt.Errorf("parse proxy[%d], tag: `%s` failed: %s", i+1, proxy.Proxy.Tag(), err)
+			return nil, fmt.Errorf("parse outbound[%d], tag: `%s` failed: %s", i+1, proxy.Proxy.Tag(), err)
 		}
 		m = append(m, *options)
 	}
