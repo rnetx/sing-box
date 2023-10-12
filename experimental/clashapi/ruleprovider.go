@@ -27,8 +27,10 @@ func getRuleProviders(router adapter.Router) func(w http.ResponseWriter, r *http
 	return func(w http.ResponseWriter, r *http.Request) {
 		ruleProviders := router.RuleProviders()
 		if ruleProviders == nil {
-			render.Status(r, http.StatusNotFound)
-			render.JSON(w, r, ErrNotFound)
+			render.Status(r, http.StatusOK)
+			render.JSON(w, r, render.M{
+				"providers": render.M{},
+			})
 			return
 		}
 		m := render.M{}

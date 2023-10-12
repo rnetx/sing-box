@@ -33,8 +33,10 @@ func getProviders(server *Server, router adapter.Router) func(w http.ResponseWri
 	return func(w http.ResponseWriter, r *http.Request) {
 		proxyProviders := router.ProxyProviders()
 		if proxyProviders == nil {
-			render.Status(r, http.StatusNotFound)
-			render.JSON(w, r, ErrNotFound)
+			render.Status(r, http.StatusOK)
+			render.JSON(w, r, render.M{
+				"providers": render.M{},
+			})
 			return
 		}
 		m := render.M{}
