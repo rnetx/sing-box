@@ -86,6 +86,17 @@ func (p *VMess) ParseLink(link string) error {
 		}
 	}
 	switch _vmessInfo.Network {
+	case "kcp":
+		return fmt.Errorf("parse link `%s` failed: kcp unsupported", link)
+	case "quic":
+		quicSecurity := _vmessInfo.Type
+		if quicSecurity != "" && quicSecurity != "none" {
+			return fmt.Errorf("parse link `%s` failed: quic security unsupported", link)
+		}
+		options.VLESSOptions.Transport = &option.V2RayTransportOptions{
+			Type:        C.V2RayTransportTypeQUIC,
+			QUICOptions: option.V2RayQUICOptions{},
+		}
 	case "grpc":
 		options.VMessOptions.Transport = &option.V2RayTransportOptions{
 			Type: C.V2RayTransportTypeGRPC,

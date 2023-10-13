@@ -103,15 +103,16 @@ func (p *VLESS) ParseLink(link string) error {
 				Fingerprint: fp,
 			}
 		}
-	case "":
 	default:
-		return fmt.Errorf("parse link `%s` failed: invalid security: `%s`", link, security)
+		// TODO: security == 'none' || '' ???
 	}
 	_type := args.Get("type")
 	switch _type {
+	case "kcp":
+		return fmt.Errorf("parse link `%s` failed: kcp unsupported", link)
 	case "quic":
 		quicSecurity := args.Get("quicSecurity")
-		if quicSecurity != "" {
+		if quicSecurity != "" && quicSecurity != "none" {
 			return fmt.Errorf("parse link `%s` failed: quic security unsupported", link)
 		}
 		options.VLESSOptions.Transport = &option.V2RayTransportOptions{
