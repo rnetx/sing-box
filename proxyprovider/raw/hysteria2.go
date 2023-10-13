@@ -42,6 +42,9 @@ func (p *Hysteria2) ParseLink(link string) error {
 		return fmt.Errorf("parse link `%s` failed: parse args failed: %w", link, err)
 	}
 	sni := args.Get("sni")
+	if sni == "" {
+		sni = args.Get("peer")
+	}
 	var insecure bool
 	insecureStr := args.Get("insecure")
 	switch insecureStr {
