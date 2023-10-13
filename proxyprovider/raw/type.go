@@ -70,3 +70,39 @@ func ParseRawConfig(raw []byte) ([]option.Outbound, error) {
 	}
 	return peerList, nil
 }
+
+func ParseRawLink(link string) (*option.Outbound, error) {
+	ss := strings.SplitN(link, "://", 2)
+	if len(ss) != 2 {
+		return nil, fmt.Errorf("invalid link")
+	}
+	head := ss[0]
+	var peer RawInterface
+	switch head {
+	case "http", "https":
+		peer = &HTTP{}
+	case "socks", "socks4", "socks4a", "socks5", "socks5h":
+		peer = &Socks{}
+	case "hysteria":
+		peer = &Hysteria{}
+	case "hy2", "hysteria2":
+		peer = &Hysteria2{}
+	case "ss":
+		peer = &Shadowsocks{}
+	case "trojan":
+		peer = &Trojan{}
+	case "vmess":
+		peer = &VMess{}
+	case "vless":
+		peer = &VLESS{}
+	case "tuic":
+		peer = &Tuic{}
+	default:
+		return nil, fmt.Errorf("invalid link: unsupport protocol: %s", head)
+	}
+	err := peer.ParseLink(head + "://" + ss[1])
+	if err != nil {
+		return nil, fmt.Errorf("parse failed: %s", err)
+	}
+	return peer.Options(), nil
+}

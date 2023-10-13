@@ -3,11 +3,13 @@
 package proxyprovider
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -19,6 +21,9 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/proxyprovider/clash"
+	"github.com/sagernet/sing-box/proxyprovider/raw"
+	"github.com/sagernet/sing-box/proxyprovider/singbox"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
@@ -564,4 +569,61 @@ func copyDialerOptions(dialer *option.DialerOptions) option.DialerOptions {
 		*newDialer.UDPFragment = *dialer.UDPFragment
 	}
 	return newDialer
+}
+
+func ParseLink(ctx context.Context, link string) ([]option.Outbound, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, fmt.Errorf("invalid link")
+	}
+	switch u.Scheme {
+	case "http", "https":
+	default:
+		// Try Raw Config
+		outbound, err := raw.ParseRawLink(link)
+		if err != nil {
+			return nil, err
+		}
+		return []option.Outbound{*outbound}, nil
+	}
+
+	req, err := http.NewRequest(http.MethodGet, link, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "clash.meta; clashmeta; sing-box; singbox; SFA; SFI; SFM; SFT") // TODO: UA??
+
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("invalid http status code: %d", resp.StatusCode)
+	}
+
+	buffer := bytes.NewBuffer(nil)
+	_, err = buffer.ReadFrom(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	data := buffer.Bytes()
+
+	// Try Clash Config
+	outbounds, err := clash.ParseClashConfig(data)
+	if err != nil {
+		// Try Raw Config
+		outbounds, err = raw.ParseRawConfig(data)
+		if err != nil {
+			// Try Singbox Config
+			outbounds, err = singbox.ParseSingboxConfig(data)
+			if err != nil {
+				return nil, fmt.Errorf("parse config failed, config is not clash config or raw links or sing-box config")
+			}
+		}
+	}
+
+	return outbounds, nil
 }
