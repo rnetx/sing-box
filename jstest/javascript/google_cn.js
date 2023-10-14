@@ -3,8 +3,7 @@ function Test(outbounds, now_selected) {
     var requests = new Array();
 
     for (var i = 0; i < outbounds.length; i++) {
-        var outbound = outbounds[i];
-        var request = {
+        requests.push({
             method: "GET",
             url: "https://www.youtube.com/premium",
             headers: {
@@ -20,40 +19,42 @@ function Test(outbounds, now_selected) {
                 "PREF": "tz=Asia.Shanghai",
                 "_gcl_au": "1.1.1809531354.1646633279",
             },
-            detour: outbound
-        };
-        requests.push(request);
+            detour: outbounds[i]
+        });
     }
 
-    var results = http_requests(requests);
+    var result = http_requests(requests);
 
-    if (typeof results == 'string') {
-        return results;
+    if (typeof result.error === 'string' && result.error != "") {
+        return { error: result.error };
     }
 
     log_debug("http requests success");
 
+    var responses = result.value;
     var selected = null;
     var min_cost = 0;
 
-    for (var i = 0; i < results.length; i++) {
-        var result = results[i];
+    for (var i = 0; i < responses.length; i++) {
+        var result = responses[i];
         if (result.error !== null && result.error !== "") {
-            log_debug("detour: [" + outbounds[i] + "], status: [" + result.status + "], cost: [" + result.cost + "ms]")
+            var isCN = true;
             if (result.status === 200 && result.body !== "" && result.body.search("www.google.cn") < 0) {
+                isCN = false;
                 if (min_cost === 0 || result.cost < min_cost) {
                     selected = outbounds[i];
                     min_cost = result.cost;
                 }
             }
+            log_debug("detour: [" + outbounds[i] + "], status: [" + result.status + "], cn: ["+isCN+"], cost: [" + result.cost + "ms]")
         } else {
             log_error("detour: [" + outbounds[i] + "], error: [" + result.error + "]");
         }
     }
 
     if (selected == null) {
-        return "No outbound is available";
+        return { error: "no outbound is available" };
     }
 
-    return { selected: selected };
+    return { value: selected };
 }

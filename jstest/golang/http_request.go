@@ -35,42 +35,38 @@ type httpResponse struct {
 }
 
 func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[string]*http.Client) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
+	return JSDo[otto.Value](jsVM, func(call otto.FunctionCall) (*otto.Value, error) {
 		requestsArg := call.Argument(0)
 		if !requestsArg.IsObject() {
-			errStr, _ := jsVM.ToValue("requests must be an object")
-			return errStr
+			return nil, E.New("requests must be object")
 		}
 
 		requestsAny, err := requestsArg.Export()
 		if err != nil {
-			errStr, _ := jsVM.ToValue(E.Cause(err, "failed to parse requests").Error())
-			return errStr
+			return nil, E.Cause(err, "failed to parse requests")
 		}
 		raw, err := json.Marshal(requestsAny)
 		if err != nil {
-			errStr, _ := jsVM.ToValue(E.Cause(err, "failed to parse requests").Error())
-			return errStr
+			return nil, E.Cause(err, "failed to parse requests")
 		}
 		var requests []httpRequest
 		err = json.Unmarshal(raw, &requests)
 		if err != nil {
-			errStr, _ := jsVM.ToValue(E.Cause(err, "failed to parse requests").Error())
-			return errStr
+			return nil, E.Cause(err, "failed to parse requests")
 		}
 		for i := range requests {
 			if requests[i].Method == "" {
 				requests[i].Method = http.MethodGet
 			}
+			if requests[i].URL == "" {
+				return nil, E.Cause(err, "url must not be empty")
+			}
 			if requests[i].Detour == "" {
-				errStr, _ := jsVM.ToValue("detour must not be empty")
-				return errStr
+				return nil, E.Cause(err, "detour must not be empty")
 			}
 		}
-
 		if len(requests) == 0 {
-			errStr, _ := jsVM.ToValue("requests must not be empty")
-			return errStr
+			return nil, E.Cause(err, "requests must not be empty")
 		}
 
 		var timeout time.Duration
@@ -84,14 +80,12 @@ func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[stri
 				if s != "" {
 					d, err := time.ParseDuration(s)
 					if err != nil {
-						errStr, _ := jsVM.ToValue(E.Cause(err, "failed to parse timeout").Error())
-						return errStr
+						return nil, E.Cause(err, "failed to parse timeout")
 					}
 					timeout = d
 				}
 			} else {
-				errStr, _ := jsVM.ToValue("timeout must be number or time string")
-				return errStr
+				return nil, E.New("timeout must be number or string")
 			}
 		}
 
@@ -127,11 +121,7 @@ func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[stri
 			}
 		}
 
-		responsesJS, err := jsVM.Object(`(new Array())`)
-		if err != nil {
-			errStr, _ := jsVM.ToValue(E.Cause(err, "failed to create responses object").Error())
-			return errStr
-		}
+		responsesJS, _ := jsVM.Object(`(new Array())`)
 		for _, response := range responses {
 			responseJS, _ := jsVM.Object(`({})`)
 			if response.Error != nil {
@@ -148,9 +138,10 @@ func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[stri
 			}
 			responsesJS.Call("push", responseJS)
 		}
+		responseValue := responsesJS.Value()
 
-		return responsesJS.Value()
-	}
+		return &responseValue, nil
+	})
 }
 
 func httpRequestDo(ctx context.Context, httpClient *http.Client, req *httpRequest) (resp *httpResponse) {

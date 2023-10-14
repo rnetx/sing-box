@@ -5,6 +5,8 @@ package outbound
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -39,6 +41,7 @@ type JSTest struct {
 	interval                     time.Duration
 	jsPath                       string
 	jsBase64                     string
+	jsGlobalVar                  map[string]any
 	jsVM                         *otto.Otto
 	jsCtx                        context.Context
 	jsCancel                     context.CancelFunc
@@ -61,6 +64,7 @@ func NewJSTest(ctx context.Context, router adapter.Router, logger log.ContextLog
 		interruptExternalConnections: options.InterruptExistConnections,
 		jsPath:                       options.JSPath,
 		jsBase64:                     options.JSBase64,
+		jsGlobalVar:                  options.JSGlobalVar,
 		interval:                     time.Duration(options.Interval),
 	}
 	if len(outbound.tags) == 0 {
@@ -119,6 +123,19 @@ func (j *JSTest) Start() error {
 		j.jsVM.Set("log_fatal", jg.JSGoLog(j.jsVM, j.logger.Fatal))
 	}
 	var err error
+	if j.jsGlobalVar != nil {
+		var vv otto.Value
+		for k, v := range j.jsGlobalVar {
+			if k == "" {
+				continue
+			}
+			vv, err = j.jsVM.ToValue(v)
+			if err != nil {
+				return E.New("convert js global var: ", err)
+			}
+			j.jsVM.Set(k, vv)
+		}
+	}
 	var raw []byte
 	if j.jsPath != "" {
 		raw, err = os.ReadFile(j.jsPath)
@@ -195,12 +212,16 @@ func (j *JSTest) loopTest() {
 // function Test(outbounds, now_selected)
 //
 // Params:
-// * outbounds: string[]
+// * outbounds: []string
 // * now_selected: string
 //
 // Returns:
-// * err string
-// *(or) object => {selected: string}
+// * result => {value: selected(string), error: string}
+
+type jsResponse struct {
+	Value string `json:"value,omitempty"`
+	Error string `json:"error,omitempty"`
+}
 
 func (j *JSTest) test() {
 	j.logger.Info("run js test")
@@ -221,29 +242,30 @@ func (j *JSTest) test() {
 	default:
 	}
 	j.logger.Info("js test run success")
-	object, err := value.Export()
+	if !value.IsObject() {
+		j.logger.Error("js test run: invalid return value: ", fmt.Sprintf("%v", value))
+		return
+	}
+	raw, err := value.Object().MarshalJSON()
 	if err != nil {
 		j.logger.Error("js test run: invalid return value: ", err)
 		return
 	}
-	switch v := object.(type) {
-	case string:
-		j.logger.Error("js test run: ", v)
-	case map[string]any:
-		selectedAny, ok := v["selected"]
-		if !ok || selectedAny == nil {
-			j.logger.Error("js test run: invalid return value: ", object)
-			return
-		}
-		selected, ok := selectedAny.(string)
-		if !ok {
-			j.logger.Error("js test run: invalid return value: ", object)
-			return
-		}
-		j.logger.Info("js test run: select [", selected, "]")
-	default:
-		j.logger.Error("js test run: invalid return value: ", object)
+	var response jsResponse
+	err = json.Unmarshal(raw, &response)
+	if err != nil {
+		j.logger.Error("js test run: invalid return value: ", err)
+		return
 	}
+	if response.Error != "" {
+		j.logger.Error("js test run: ", response.Error)
+		return
+	}
+	if response.Value == "" {
+		j.logger.Error("js test run: invalid return value: ", response.Value)
+		return
+	}
+	j.logger.Info("js test run: select [", response.Value, "]")
 }
 
 func (j *JSTest) SelectOutbound(tag string) bool {
