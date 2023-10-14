@@ -107,6 +107,7 @@ func NewProxyProvider(ctx context.Context, router adapter.Router, logger log.Con
 				Type:            groupOptions.Type,
 				SelectorOptions: groupOptions.SelectorOptions,
 				URLTestOptions:  groupOptions.URLTestOptions,
+				JSTestOptions:   groupOptions.JSTestOptions,
 			}
 			if groupOptions.Filter != nil {
 				filter, err := NewFilter(groupOptions.Filter)
@@ -271,6 +272,7 @@ func (p *ProxyProvider) GetFullOutboundOptions() ([]option.Outbound, error) {
 				Type:            group.Type,
 				SelectorOptions: group.SelectorOptions,
 				URLTestOptions:  group.URLTestOptions,
+				JSTestOptions:   group.JSTestOptions,
 			}
 			var outbounds []string
 			switch group.Type {
@@ -282,6 +284,10 @@ func (p *ProxyProvider) GetFullOutboundOptions() ([]option.Outbound, error) {
 				outbounds = append(outbounds, group.URLTestOptions.Outbounds...)
 				outbounds = append(outbounds, outboundTags...)
 				outboundOptions.URLTestOptions.Outbounds = outbounds
+			case C.TypeJSTest:
+				outbounds = append(outbounds, group.JSTestOptions.Outbounds...)
+				outbounds = append(outbounds, outboundTags...)
+				outboundOptions.JSTestOptions.Outbounds = outbounds
 			}
 			groupOutbounds = append(groupOutbounds, outboundOptions)
 			groupOutboundTags = append(groupOutboundTags, group.Tag)

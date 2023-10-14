@@ -51,5 +51,6 @@ type Group struct {
 	Type            string
 	SelectorOptions option.SelectorOutboundOptions
 	URLTestOptions  option.URLTestOutboundOptions
+	JSTestOptions   option.JSTestOutboundOptions
 	Filter          *Filter
 }

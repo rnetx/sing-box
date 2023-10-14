@@ -33,6 +33,7 @@ type _ProxyProviderGroup struct {
 	Type            string                  `json:"type"`
 	SelectorOptions SelectorOutboundOptions `json:"-"`
 	URLTestOptions  URLTestOutboundOptions  `json:"-"`
+	JSTestOptions   JSTestOutboundOptions   `json:"-"`
 	Filter          *ProxyProviderFilter    `json:"filter,omitempty"`
 }
 
@@ -45,6 +46,8 @@ func (p ProxyProviderGroup) MarshalJSON() ([]byte, error) {
 		v = p.SelectorOptions
 	case C.TypeURLTest:
 		v = p.URLTestOptions
+	case C.TypeJSTest:
+		v = p.JSTestOptions
 	default:
 		return nil, E.New("unknown outbound type: ", p.Type)
 	}
@@ -62,6 +65,8 @@ func (p *ProxyProviderGroup) UnmarshalJSON(bytes []byte) error {
 		v = &p.SelectorOptions
 	case C.TypeURLTest:
 		v = &p.URLTestOptions
+	case C.TypeJSTest:
+		v = &p.JSTestOptions
 	default:
 		return E.New("unknown outbound type: ", p.Type)
 	}

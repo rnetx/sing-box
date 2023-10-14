@@ -56,6 +56,11 @@ require (
 	howett.net/plist v1.0.0
 )
 
+require (
+	github.com/robertkrimen/otto v0.2.1 // indirect
+	gopkg.in/sourcemap.v1 v1.0.5 // indirect
+)
+
 //replace github.com/sagernet/sing => ../sing
 
 require (
