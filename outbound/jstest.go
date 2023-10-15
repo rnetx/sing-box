@@ -276,6 +276,7 @@ func (j *JSTest) test() {
 		j.logger.Error("js test run: invalid return value: ", response.Value)
 		return
 	}
+	j.SelectOutbound(response.Value)
 	j.logger.Info("js test run: select [", response.Value, "]")
 }
 
