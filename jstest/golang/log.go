@@ -1,6 +1,9 @@
 package golang
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/robertkrimen/otto"
 )
 
@@ -11,18 +14,22 @@ func JSGoLog(jsVM *otto.Otto, logFunc func(args ...any)) func(otto.FunctionCall)
 		}
 		args := make([]any, 0, len(call.ArgumentList))
 		for _, arg := range call.ArgumentList {
-			item, err := arg.Export()
-			if err == nil {
-				if item == nil {
-					args = append(args, "???")
-				} else {
-					args = append(args, item)
-				}
-			} else {
-				args = append(args, "???")
-			}
+			args = append(args, fmt.Sprint(logValue(arg)))
 		}
 		logFunc(args...)
 		return otto.NullValue()
 	}
+}
+
+func logValue(v otto.Value) any {
+	raw, err := v.MarshalJSON()
+	if err != nil {
+		return "???"
+	}
+	var m any
+	err = json.Unmarshal(raw, &m)
+	if err != nil {
+		return "???"
+	}
+	return m
 }
