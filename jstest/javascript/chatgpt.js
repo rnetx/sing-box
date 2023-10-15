@@ -34,7 +34,7 @@ function Test(outbounds, now_selected) {
             log_error("detour: [" + outbounds[i] + "], error: [" + result.error + "]");
         } else {
             var isAllow = false;
-            if (typeof result.body == 'string' && result.body !== "" && result.body.search("Sorry, you have been blocked") < 0) {
+            if (result.status !== 403 && typeof result.body == 'string' && result.body !== "" && result.body.search("Sorry, you have been blocked") < 0) {
                 isAllow = true;
                 if (min_cost === 0 || result.cost < min_cost) {
                     selected = outbounds[i];
