@@ -16,25 +16,28 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
-type httpRequest struct {
-	Method  string            `json:"method"`
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers"`
-	Cookies map[string]string `json:"cookies"`
-	Body    string            `json:"body"`
-	Timeout option.Duration   `json:"timeout"`
-	Detour  string            `json:"detour"`
+type HTTPRequest struct {
+	Method          string            `json:"method"`
+	URL             string            `json:"url"`
+	Headers         map[string]string `json:"headers"`
+	Cookies         map[string]string `json:"cookies"`
+	Body            string            `json:"body"`
+	DisableRedirect bool              `json:"disable_redirect"`
+	Timeout         option.Duration   `json:"timeout"`
+	Detour          string            `json:"detour"`
 }
 
-type httpResponse struct {
+type HTTPResponse struct {
 	Status  int
-	Headers http.Header
+	Headers map[string]string
 	Body    string
 	Cost    time.Duration
 	Error   error
 }
 
-func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[string]*http.Client) func(call otto.FunctionCall) otto.Value {
+var HTTPRequestKey = (*struct{})(nil)
+
+func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClient *http.Client) func(call otto.FunctionCall) otto.Value {
 	return JSDo[otto.Value](jsVM, func(call otto.FunctionCall) (*otto.Value, error) {
 		requestsArg := call.Argument(0)
 		if !requestsArg.IsObject() {
@@ -49,7 +52,7 @@ func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[stri
 		if err != nil {
 			return nil, E.Cause(err, "failed to parse requests")
 		}
-		var requests []httpRequest
+		var requests []HTTPRequest
 		err = json.Unmarshal(raw, &requests)
 		if err != nil {
 			return nil, E.Cause(err, "failed to parse requests")
@@ -98,19 +101,21 @@ func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[stri
 		}
 		defer cancel()
 
-		responses := make([]httpResponse, len(requests))
+		responses := make([]HTTPResponse, len(requests))
 		var responseLock sync.Mutex
 		if len(requests) == 1 {
 			request := requests[0]
-			responses[0] = *httpRequestDo(ctx, httpClients[request.Detour], &request)
+			ctx := context.WithValue(ctx, HTTPRequestKey, &request)
+			responses[0] = *HTTPRequestDo(ctx, httpClient, &request)
 		} else {
 			requestDone := make(chan struct{}, len(requests))
 			for i, request := range requests {
-				go func(index int, request httpRequest) {
+				go func(index int, request HTTPRequest) {
 					defer func() {
 						requestDone <- struct{}{}
 					}()
-					response := httpRequestDo(ctx, httpClients[request.Detour], &request)
+					ctx := context.WithValue(ctx, HTTPRequestKey, &request)
+					response := HTTPRequestDo(ctx, httpClient, &request)
 					responseLock.Lock()
 					responses[index] = *response
 					responseLock.Unlock()
@@ -129,12 +134,8 @@ func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[stri
 			} else {
 				responseJS.Set("cost", response.Cost.Milliseconds())
 				responseJS.Set("status", response.Status)
-				if response.Headers != nil && len(response.Headers) > 0 {
-					responseJS.Set("headers", response.Headers)
-				}
-				if response.Body != "" {
-					responseJS.Set("body", response.Body)
-				}
+				responseJS.Set("headers", response.Headers)
+				responseJS.Set("body", response.Body)
 			}
 			responsesJS.Call("push", responseJS)
 		}
@@ -144,8 +145,8 @@ func JSGoHTTPRequests(ctx context.Context, jsVM *otto.Otto, httpClients map[stri
 	})
 }
 
-func httpRequestDo(ctx context.Context, httpClient *http.Client, req *httpRequest) (resp *httpResponse) {
-	resp = &httpResponse{}
+func HTTPRequestDo(ctx context.Context, httpClient *http.Client, req *HTTPRequest) (resp *HTTPResponse) {
+	resp = &HTTPResponse{}
 	var body io.Reader
 	if req.Body != "" {
 		body = strings.NewReader(req.Body)
@@ -194,7 +195,10 @@ func httpRequestDo(ctx context.Context, httpClient *http.Client, req *httpReques
 	if buffer.Len() > 0 {
 		resp.Body = buffer.String()
 	}
-	resp.Headers = httpResp.Header
+	resp.Headers = make(map[string]string)
+	for k, v := range httpResp.Header {
+		resp.Headers[k] = strings.Join(v, ", ")
+	}
 
 	return
 }

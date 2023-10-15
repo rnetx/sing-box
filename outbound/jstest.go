@@ -161,20 +161,28 @@ func (j *JSTest) Start() error {
 	go func() {
 		<-j.jsCtx.Done()
 		j.jsVM.Interrupt <- func() {}
+		close(j.jsVM.Interrupt)
 	}()
-	httpClients := make(map[string]*http.Client, len(j.outbounds))
-	for _, tag := range j.tags {
-		detour := j.outbounds[tag]
-		httpClient := &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-					return detour.DialContext(ctx, network, M.ParseSocksaddr(address))
-				},
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				httpRequest := ctx.Value(jg.HTTPRequestKey).(*jg.HTTPRequest)
+				detour, loaded := j.outbounds[httpRequest.Detour]
+				if !loaded {
+					return nil, E.New("outbound not found: ", httpRequest.Detour)
+				}
+				return detour.DialContext(ctx, network, M.ParseSocksaddr(address))
 			},
-		}
-		httpClients[tag] = httpClient
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			httpRequest := req.Context().Value(jg.HTTPRequestKey).(*jg.HTTPRequest)
+			if httpRequest.DisableRedirect {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
 	}
-	j.jsVM.Set("http_requests", jg.JSGoHTTPRequests(j.jsCtx, j.jsVM, httpClients))
+	j.jsVM.Set("http_requests", jg.JSGoHTTPRequests(j.jsCtx, j.jsVM, httpClient))
 	go j.loopTest()
 
 	return nil
@@ -185,9 +193,6 @@ func (j *JSTest) Close() error {
 		j.jsCancel()
 		<-j.jsCloseDone
 		close(j.jsCloseDone)
-	}
-	if j.jsVM != nil {
-		close(j.jsVM.Interrupt)
 	}
 	return nil
 }
@@ -224,6 +229,12 @@ type jsResponse struct {
 }
 
 func (j *JSTest) test() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			j.logger.Error("js test painc: ", err)
+		}
+	}()
 	j.logger.Info("run js test")
 	defer j.logger.Info("js test run done")
 	value, err := j.jsVM.Call("Test", nil, j.tags, j.selected.Tag())
