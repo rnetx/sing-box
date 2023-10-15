@@ -8,12 +8,13 @@ import (
 
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-box/transport/hysteria"
+	"github.com/sagernet/sing-box/proxyprovider/utils"
 )
 
 type ClashHysteria2 struct {
 	ClashProxyBasic `yaml:",inline"`
 	//
+	Password     string `yaml:"password"`
 	Obfs         string `yaml:"obfs"`
 	ObfsPassword string `yaml:"obfs-password"`
 	Up           string `yaml:"up"`
@@ -45,6 +46,7 @@ func (c *ClashHysteria2) GenerateOptions() (*option.Outbound, error) {
 				Server:     c.ClashProxyBasic.Server,
 				ServerPort: uint16(c.ClashProxyBasic.ServerPort),
 			},
+			Password: c.Password,
 		},
 	}
 
@@ -59,8 +61,8 @@ func (c *ClashHysteria2) GenerateOptions() (*option.Outbound, error) {
 		outboundOptions.Hysteria2Options.Obfs = obfsOptions
 	}
 
-	outboundOptions.Hysteria2Options.UpMbps = int(hysteria.StringToBps(c.Up))
-	outboundOptions.Hysteria2Options.DownMbps = int(hysteria.StringToBps(c.Down))
+	outboundOptions.Hysteria2Options.UpMbps = int(utils.StringToMbps(c.Up))
+	outboundOptions.Hysteria2Options.DownMbps = int(utils.StringToMbps(c.Down))
 
 	tlsOptions := &option.OutboundTLSOptions{
 		Enabled:  true,
