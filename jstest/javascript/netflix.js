@@ -87,7 +87,7 @@ function Test(outbounds, now_selected) {
                     min_cost = (result1.cost + result2.cost) / 2;
                 }
             }
-            log_debug("detour: [" + outbounds[i] + "], status: [" + result1.status + " " + result2.status + "], type: [" + type + "], cost: [" + result1.cost + "ms, " + result2.cost + "ms]")
+            log_debug("detour: [" + outbounds[i] + "], status: [" + result1.status + ", " + result2.status + "], type: [" + type + "], cost: [" + (result1.cost + result2.cost) / 2 + "ms]")
         }
     }
 
