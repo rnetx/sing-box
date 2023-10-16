@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -24,10 +25,12 @@ var _ adapter.Outbound = (*RandomAddr)(nil)
 
 type RandomAddr struct {
 	myOutboundAdapter
-	ctx       context.Context
-	dialer    N.Dialer
-	addresses []option.RandomAddress
-	udp       bool
+	ctx             context.Context
+	dialer          N.Dialer
+	randomAddresses []randomAddress
+	ignoreFqdn      bool
+	deleteFqdn      bool
+	udp             bool
 }
 
 func NewRandomAddr(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.RandomAddrOutboundOptions) (adapter.Outbound, error) {
@@ -38,6 +41,14 @@ func NewRandomAddr(ctx context.Context, router adapter.Router, logger log.Contex
 	if err != nil {
 		return nil, err
 	}
+	randomAddresses := make([]randomAddress, 0, len(options.Addresses))
+	for _, address := range options.Addresses {
+		randomAddress, err := newRandomAddress(address.IP, address.Port)
+		if err != nil {
+			return nil, E.Cause(err, address)
+		}
+		randomAddresses = append(randomAddresses, *randomAddress)
+	}
 	r := &RandomAddr{
 		myOutboundAdapter: myOutboundAdapter{
 			protocol:     C.TypeRandomAddr,
@@ -46,22 +57,24 @@ func NewRandomAddr(ctx context.Context, router adapter.Router, logger log.Contex
 			tag:          tag,
 			dependencies: withDialerDependency(options.DialerOptions),
 		},
-		ctx:       ctx,
-		dialer:    outboundDialer,
-		addresses: options.Addresses,
-		udp:       options.UDP,
+		ctx:             ctx,
+		dialer:          outboundDialer,
+		randomAddresses: randomAddresses,
+		ignoreFqdn:      options.IgnoreFqdn,
+		deleteFqdn:      options.DeleteFqdn,
+		udp:             options.UDP,
 	}
 	return r, nil
 }
 
 func (r *RandomAddr) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	r.rewriteSocksAddr(&destination)
+	r.overrideDestination(ctx, &destination)
 	return r.dialer.DialContext(ctx, network, destination)
 }
 
 func (r *RandomAddr) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	if r.udp {
-		r.rewriteSocksAddr(&destination)
+		r.overrideDestination(ctx, &destination)
 	}
 	return r.dialer.ListenPacket(ctx, destination)
 }
@@ -74,38 +87,101 @@ func (r *RandomAddr) NewPacketConnection(ctx context.Context, conn N.PacketConn,
 	return NewPacketConnection(ctx, r, conn, metadata)
 }
 
-func (r *RandomAddr) rewriteSocksAddr(destination *M.Socksaddr) {
-	address := r.addresses[random().Int31n(int32(len(r.addresses)))]
-	if address.Port != nil {
-		destination.Port = *address.Port
-	}
-	if address.IP != nil {
-		prefix := netip.Prefix(*address.IP)
-		bits := prefix.Bits()
-		if bits == 32 || bits == 128 {
-			destination.Addr = prefix.Addr()
-		} else {
-			destination.Addr = randomAddrFromPrefix(prefix)
+func (r *RandomAddr) overrideDestination(ctx context.Context, destination *M.Socksaddr) {
+	if !destination.IsFqdn() || !r.ignoreFqdn {
+		address := r.randomAddresses[randomRand().Intn(len(r.randomAddresses))].randomAddr(destination.Port)
+		r.logger.DebugContext(ctx, "random address: ", address.String())
+		destination.Addr = address.Addr()
+		destination.Port = address.Port()
+		if r.deleteFqdn {
+			destination.Fqdn = ""
 		}
 	}
 }
 
-func random() *rand.Rand {
+func randomRand() *rand.Rand {
 	return rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
-func randomAddrFromPrefix(prefix netip.Prefix) netip.Addr {
-	startN := big.NewInt(0).SetBytes(prefix.Addr().AsSlice())
-	var bits int
-	if prefix.Addr().Is4() {
-		bits = 5
-	} else {
-		bits = 7
+type randomAddress struct {
+	start  *netip.Addr
+	end    *netip.Addr
+	prefix *netip.Prefix
+	port   uint16
+}
+
+func newRandomAddress(address string, port uint16) (*randomAddress, error) {
+	if address == "" {
+		return nil, E.New("empty ip address")
 	}
-	bt := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(1<<bits-int64(prefix.Bits())), nil)
-	bt.Sub(bt, big.NewInt(2))
-	n := big.NewInt(0).Rand(random(), bt)
-	n.Add(n, startN)
-	newAddr, _ := netip.AddrFromSlice(n.Bytes())
-	return newAddr
+	ip, err := netip.ParseAddr(address)
+	if err == nil {
+		return &randomAddress{start: &ip, port: port}, nil
+	}
+	prefix, err := netip.ParsePrefix(address)
+	if err == nil {
+		addr := prefix.Addr()
+		if addr.Is4() && prefix.Bits() == 32 {
+			return &randomAddress{start: &addr, port: port}, nil
+		}
+		if !addr.Is6() && prefix.Bits() == 128 {
+			return &randomAddress{start: &addr, port: port}, nil
+		}
+		return &randomAddress{prefix: &prefix, port: port}, nil
+	}
+	addrs := strings.SplitN(address, "-", 2)
+	if len(addrs) < 2 {
+		return nil, E.New("invalid ip address")
+	}
+	start, err := netip.ParseAddr(addrs[0])
+	if err != nil {
+		return nil, E.New("invalid ip address")
+	}
+	end, err := netip.ParseAddr(addrs[1])
+	if err != nil {
+		return nil, E.New("invalid ip address")
+	}
+	if start.Compare(end) > 0 {
+		return nil, E.New("invalid ip address")
+	}
+	if (start.Is4() && end.Is6()) || (start.Is6() && end.Is4()) {
+		return nil, E.New("invalid ip address")
+	}
+	return &randomAddress{start: &start, end: &end, port: port}, nil
+}
+
+func (i *randomAddress) randomIP() netip.Addr {
+	if i.prefix != nil {
+		startN := big.NewInt(0).SetBytes(i.prefix.Addr().AsSlice())
+		var bits int
+		if i.prefix.Addr().Is4() {
+			bits = 5
+		} else {
+			bits = 7
+		}
+		bt := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(1<<bits-int64(i.prefix.Bits())), nil)
+		bt.Sub(bt, big.NewInt(2))
+		n := big.NewInt(0).Rand(randomRand(), bt)
+		n.Add(n, startN)
+		newAddr, _ := netip.AddrFromSlice(n.Bytes())
+		return newAddr
+	}
+	if i.end == nil {
+		return *i.start
+	} else {
+		startN := big.NewInt(0).SetBytes(i.start.AsSlice())
+		endN := big.NewInt(0).SetBytes(i.end.AsSlice())
+		addrN := big.NewInt(0).Rand(randomRand(), big.NewInt(0).Sub(endN, startN))
+		addrN.Add(addrN, startN)
+		addr, _ := netip.AddrFromSlice(addrN.Bytes())
+		return addr
+	}
+}
+
+func (i *randomAddress) randomAddr(port uint16) netip.AddrPort {
+	addr := i.randomIP()
+	if i.port != 0 {
+		port = i.port
+	}
+	return netip.AddrPortFrom(addr, port)
 }
