@@ -20,6 +20,7 @@ type ProxyProvider struct {
 	Groups         []ProxyProviderGroup `json:"groups,omitempty"`
 	RequestDialer  DialerOptions        `json:"request_dialer,omitempty"`
 	Dialer         *DialerOptions       `json:"dialer,omitempty"`
+	LookupIP       bool                 `json:"lookup_ip,omitempty"`
 	RunningDetour  string               `json:"running_detour,omitempty"`
 }
 

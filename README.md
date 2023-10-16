@@ -55,6 +55,7 @@ with this application without prior consent.
                 "white_mode": true, // 白名单模式，匹配的节点会被保留，不匹配的节点会被删除
                 "rules": [], // 规则，Golang 正则表达式
             },
+            "lookup_ip": false, // 是否查询 IP 地址，覆盖节点地址，需要设置 dns 字段
             "download_ua": "clash.meta", // 更新订阅时使用的 User-Agent
             "dialer": {}, // 附加在节点 outbound 配置的 Dial 字段
             "request_dialer": {}, // 请求时使用的 Dial 字段配置，detour 字段无效

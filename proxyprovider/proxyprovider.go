@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"sync"
 	"time"
@@ -52,6 +53,7 @@ type ProxyProvider struct {
 	dialer         *option.DialerOptions
 	requestDialer  N.Dialer
 	runningDetour  string
+	lookupIP       bool
 
 	cacheLock            sync.RWMutex
 	cache                *Cache
@@ -94,6 +96,7 @@ func NewProxyProvider(ctx context.Context, router adapter.Router, logger log.Con
 		dns:            options.DNS,
 		dialer:         options.Dialer,
 		runningDetour:  options.RunningDetour,
+		lookupIP:       options.LookupIP,
 		tagFormat:      options.TagFormat,
 		updateInterval: time.Duration(options.UpdateInterval),
 		requestTimeout: time.Duration(options.RequestTimeout),
@@ -180,7 +183,7 @@ func (p *ProxyProvider) StartGetOutbounds() ([]option.Outbound, error) {
 	defer func() {
 		p.cache.Outbounds = nil
 	}()
-	return p.GetFullOutboundOptions()
+	return p.getFullOutboundOptions(p.ctx)
 }
 
 func (p *ProxyProvider) Start() error {
@@ -223,6 +226,10 @@ func (p *ProxyProvider) GetOutboundOptions() ([]option.Outbound, error) {
 }
 
 func (p *ProxyProvider) GetFullOutboundOptions() ([]option.Outbound, error) {
+	return p.getFullOutboundOptions(p.ctx)
+}
+
+func (p *ProxyProvider) getFullOutboundOptions(ctx context.Context) ([]option.Outbound, error) {
 	p.cacheLock.RLock()
 	outbounds := p.cache.Outbounds
 	p.cacheLock.RUnlock()
@@ -231,6 +238,23 @@ func (p *ProxyProvider) GetFullOutboundOptions() ([]option.Outbound, error) {
 		for i := range outbounds {
 			outbound := &outbounds[i]
 			setDialerOptions(outbound, p.dialer)
+		}
+	}
+
+	var err error
+	if p.lookupIP && p.dns != "" {
+		for i := range outbounds {
+			outbound := &outbounds[i]
+			err = setServerAddress(outbound, func(server string) (netip.Addr, error) {
+				ips, err := simpledns.DNSLookup(ctx, p.requestDialer, p.dns, server, true, true)
+				if err != nil {
+					return netip.Addr{}, err
+				}
+				return ips[0], nil
+			})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -632,4 +656,43 @@ func ParseLink(ctx context.Context, link string) ([]option.Outbound, error) {
 	}
 
 	return outbounds, nil
+}
+
+func setServerAddress(outbound *option.Outbound, fn func(server string) (netip.Addr, error)) error {
+	var server *string
+	switch outbound.Type {
+	case C.TypeHTTP:
+		server = &outbound.HTTPOptions.Server
+	case C.TypeShadowsocks:
+		server = &outbound.ShadowsocksOptions.Server
+	case C.TypeVMess:
+		server = &outbound.VMessOptions.Server
+	case C.TypeTrojan:
+		server = &outbound.TrojanOptions.Server
+	case C.TypeWireGuard:
+		server = &outbound.WireGuardOptions.Server
+	case C.TypeHysteria:
+		server = &outbound.HysteriaOptions.Server
+	case C.TypeSSH:
+		server = &outbound.SSHOptions.Server
+	case C.TypeShadowTLS:
+		server = &outbound.ShadowTLSOptions.Server
+	case C.TypeShadowsocksR:
+		server = &outbound.ShadowsocksROptions.Server
+	case C.TypeVLESS:
+		server = &outbound.VLESSOptions.Server
+	case C.TypeTUIC:
+		server = &outbound.TUICOptions.Server
+	case C.TypeHysteria2:
+		server = &outbound.Hysteria2Options.Server
+	}
+	if server == nil {
+		return E.New("outbound type not supported")
+	}
+	ip, err := fn(*server)
+	if err != nil {
+		return E.Cause(err, "resolve server address: ", *server)
+	}
+	*server = ip.String()
+	return nil
 }
