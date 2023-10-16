@@ -183,6 +183,7 @@ func (j *JSTest) Start() error {
 		},
 	}
 	j.jsVM.Set("http_requests", jg.JSGoHTTPRequests(j.jsCtx, j.jsVM, httpClient))
+	j.jsVM.Set("urltests", jg.JSGoURLTest(j.jsCtx, j.router, j.jsVM))
 	go j.loopTest()
 
 	return nil
