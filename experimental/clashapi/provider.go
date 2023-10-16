@@ -156,7 +156,7 @@ func proxyProviderInfo(server *Server, router adapter.Router, proxyProvider adap
 			out, loaded := router.Outbound(outboundTag)
 			if loaded {
 				switch out.Type() {
-				case C.TypeSelector, C.TypeURLTest:
+				case C.TypeSelector, C.TypeURLTest, C.TypeJSTest:
 					continue
 				}
 				proxies = append(proxies, proxyInfo(server, out))
