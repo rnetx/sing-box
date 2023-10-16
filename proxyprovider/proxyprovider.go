@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"sync"
 	"time"
@@ -241,20 +240,14 @@ func (p *ProxyProvider) getFullOutboundOptions(ctx context.Context) ([]option.Ou
 		}
 	}
 
-	var err error
 	if p.lookupIP && p.dns != "" {
 		for i := range outbounds {
 			outbound := &outbounds[i]
-			err = setServerAddress(outbound, func(server string) (netip.Addr, error) {
-				ips, err := simpledns.DNSLookup(ctx, p.requestDialer, p.dns, server, true, true)
-				if err != nil {
-					return netip.Addr{}, err
-				}
-				return ips[0], nil
-			})
+			ips, err := simpledns.DNSLookup(ctx, p.requestDialer, p.dns, getServer(outbound), true, true)
 			if err != nil {
 				return nil, err
 			}
+			setServer(outbound, ips[0].String())
 		}
 	}
 
@@ -272,6 +265,12 @@ func (p *ProxyProvider) getFullOutboundOptions(ctx context.Context) ([]option.Ou
 		}
 	}
 
+	outboundOptionsMap := make(map[string]*option.Outbound)
+	for i := range finalOutbounds {
+		outbound := &finalOutbounds[i]
+		outboundOptionsMap[outbound.Tag] = outbound
+	}
+
 	var allOutboundTags []string
 	for _, outbound := range finalOutbounds {
 		allOutboundTags = append(allOutboundTags, outbound.Tag)
@@ -284,7 +283,10 @@ func (p *ProxyProvider) getFullOutboundOptions(ctx context.Context) ([]option.Ou
 		for _, group := range p.groups {
 			var outboundTags []string
 			if group.Filter != nil {
-				outboundTags = group.Filter.Filter(allOutboundTags)
+				groupOutbounds := group.Filter.Filter(finalOutbounds, outboundTagMap)
+				for _, outbound := range groupOutbounds {
+					outboundTags = append(outboundTags, outbound.Tag)
+				}
 			} else {
 				outboundTags = allOutboundTags
 			}
@@ -508,19 +510,9 @@ func (p *ProxyProvider) wrapUpdate(ctx context.Context, isFirst bool) (*Cache, e
 		return nil, err
 	}
 	if p.globalFilter != nil {
-		outboundTagMap := make(map[string]*option.Outbound)
-		outboundTags := make([]string, 0, len(cache.Outbounds))
-		for i := range cache.Outbounds {
-			outboundTagMap[cache.Outbounds[i].Tag] = &cache.Outbounds[i]
-			outboundTags = append(outboundTags, cache.Outbounds[i].Tag)
-		}
-		newOutboundTags := p.globalFilter.Filter(outboundTags)
-		if len(newOutboundTags) == 0 {
+		newOutbounds := p.globalFilter.Filter(cache.Outbounds, nil)
+		if len(newOutbounds) == 0 {
 			return nil, E.New("no outbound available")
-		}
-		newOutbounds := make([]option.Outbound, 0, len(newOutboundTags))
-		for i := range newOutboundTags {
-			newOutbounds = append(newOutbounds, *outboundTagMap[newOutboundTags[i]])
 		}
 		cache.Outbounds = newOutbounds
 	}
@@ -658,41 +650,62 @@ func ParseLink(ctx context.Context, link string) ([]option.Outbound, error) {
 	return outbounds, nil
 }
 
-func setServerAddress(outbound *option.Outbound, fn func(server string) (netip.Addr, error)) error {
-	var server *string
+func getServer(outbound *option.Outbound) string {
+	var server string
 	switch outbound.Type {
 	case C.TypeHTTP:
-		server = &outbound.HTTPOptions.Server
+		server = outbound.HTTPOptions.Server
 	case C.TypeShadowsocks:
-		server = &outbound.ShadowsocksOptions.Server
+		server = outbound.ShadowsocksOptions.Server
 	case C.TypeVMess:
-		server = &outbound.VMessOptions.Server
+		server = outbound.VMessOptions.Server
 	case C.TypeTrojan:
-		server = &outbound.TrojanOptions.Server
+		server = outbound.TrojanOptions.Server
 	case C.TypeWireGuard:
-		server = &outbound.WireGuardOptions.Server
+		server = outbound.WireGuardOptions.Server
 	case C.TypeHysteria:
-		server = &outbound.HysteriaOptions.Server
+		server = outbound.HysteriaOptions.Server
 	case C.TypeSSH:
-		server = &outbound.SSHOptions.Server
+		server = outbound.SSHOptions.Server
 	case C.TypeShadowTLS:
-		server = &outbound.ShadowTLSOptions.Server
+		server = outbound.ShadowTLSOptions.Server
 	case C.TypeShadowsocksR:
-		server = &outbound.ShadowsocksROptions.Server
+		server = outbound.ShadowsocksROptions.Server
 	case C.TypeVLESS:
-		server = &outbound.VLESSOptions.Server
+		server = outbound.VLESSOptions.Server
 	case C.TypeTUIC:
-		server = &outbound.TUICOptions.Server
+		server = outbound.TUICOptions.Server
 	case C.TypeHysteria2:
-		server = &outbound.Hysteria2Options.Server
+		server = outbound.Hysteria2Options.Server
 	}
-	if server == nil {
-		return E.New("outbound type not supported")
+	return server
+}
+
+func setServer(outbound *option.Outbound, server string) {
+	switch outbound.Type {
+	case C.TypeHTTP:
+		outbound.HTTPOptions.Server = server
+	case C.TypeShadowsocks:
+		outbound.ShadowsocksOptions.Server = server
+	case C.TypeVMess:
+		outbound.VMessOptions.Server = server
+	case C.TypeTrojan:
+		outbound.TrojanOptions.Server = server
+	case C.TypeWireGuard:
+		outbound.WireGuardOptions.Server = server
+	case C.TypeHysteria:
+		outbound.HysteriaOptions.Server = server
+	case C.TypeSSH:
+		outbound.SSHOptions.Server = server
+	case C.TypeShadowTLS:
+		outbound.ShadowTLSOptions.Server = server
+	case C.TypeShadowsocksR:
+		outbound.ShadowsocksROptions.Server = server
+	case C.TypeVLESS:
+		outbound.VLESSOptions.Server = server
+	case C.TypeTUIC:
+		outbound.TUICOptions.Server = server
+	case C.TypeHysteria2:
+		outbound.Hysteria2Options.Server = server
 	}
-	ip, err := fn(*server)
-	if err != nil {
-		return E.Cause(err, "resolve server address: ", *server)
-	}
-	*server = ip.String()
-	return nil
 }

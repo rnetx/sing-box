@@ -53,8 +53,15 @@ with this application without prior consent.
             "tag_format": "proxy-provider - %s", // 如果有多个订阅并且订阅间存在重名节点，可以尝试使用，其中 %s 为占位符，会被替换为原节点名。比如：原节点名："HongKong 01"，tag_format设置为 "PP - %s"，替换后新节点名会更变为 "PP - HongKong 01"，以解决节点名冲突的问题
             "global_filter": {
                 "white_mode": true, // 白名单模式，匹配的节点会被保留，不匹配的节点会被删除
-                "rules": [], // 规则，Golang 正则表达式
+                "rules": [], // 规则，详情见下文
             },
+            // 规则
+            // 1. Golang 正则表达式 (example: Node) ==> 匹配 Tag (匹配 Node)
+            // 2. tag:Golang 正则表达式 (example: tag:Node) ==> 匹配 Tag (匹配 Node)
+            // 3. type:Golang 正则表达式 (example: type:vmess) ==> 匹配 Type (节点类型) (匹配 vmess)
+            // 4. server:Golang 正则表达式 (example: server:1.1.1.1) ==> 匹配 Server (节点服务器地址，不含端口) (匹配 1.1.1.1)
+            // 5. 若设置 tag_format 则匹配的是替换前的节点名
+            //
             "lookup_ip": false, // 是否查询 IP 地址，覆盖节点地址，需要设置 dns 字段
             "download_ua": "clash.meta", // 更新订阅时使用的 User-Agent
             "dialer": {}, // 附加在节点 outbound 配置的 Dial 字段

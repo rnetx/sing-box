@@ -1,6 +1,8 @@
 package proxyprovider
 
 import (
+	"strings"
+
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
 
@@ -9,21 +11,21 @@ import (
 
 type Filter struct {
 	whiteMode bool
-	rules     []*regexp2.Regexp
+	rules     []FilterItem
 }
 
 func NewFilter(f *option.ProxyProviderFilter) (*Filter, error) {
 	ff := &Filter{
 		whiteMode: f.WhiteMode,
 	}
-	var rules []*regexp2.Regexp
+	var rules []FilterItem
 	if f.Rules != nil && len(f.Rules) > 0 {
 		for _, rule := range f.Rules {
-			re, err := regexp2.Compile(rule, regexp2.RE2)
+			re, err := newFilterItem(rule)
 			if err != nil {
-				return nil, E.Cause(err, "invalid rule: ", rule)
+				return nil, err
 			}
-			rules = append(rules, re)
+			rules = append(rules, *re)
 		}
 	}
 	if len(rules) > 0 {
@@ -32,14 +34,13 @@ func NewFilter(f *option.ProxyProviderFilter) (*Filter, error) {
 	return ff, nil
 }
 
-func (f *Filter) Filter(list []string) []string {
+func (f *Filter) Filter(list []option.Outbound, tagMap map[string]string) []option.Outbound {
 	if f.rules != nil && len(f.rules) > 0 {
-		newList := make([]string, 0, len(list))
+		newList := make([]option.Outbound, 0, len(list))
 		for _, s := range list {
 			match := false
 			for _, rule := range f.rules {
-				ok, err := rule.MatchString(s)
-				if err == nil && ok {
+				if rule.match(&s, tagMap) {
 					match = true
 					break
 				}
@@ -57,4 +58,54 @@ func (f *Filter) Filter(list []string) []string {
 		return newList
 	}
 	return list
+}
+
+type FilterItem struct {
+	isTag    bool
+	isType   bool
+	isServer bool
+
+	regex *regexp2.Regexp
+}
+
+func newFilterItem(rule string) (*FilterItem, error) {
+	var item FilterItem
+	var bRule string
+	switch {
+	case strings.HasPrefix(rule, "tag:"):
+		bRule = strings.TrimPrefix(rule, "tag:")
+		item.isTag = true
+	case strings.HasPrefix(rule, "type:"):
+		bRule = strings.TrimPrefix(rule, "type:")
+		item.isType = true
+	case strings.HasPrefix(rule, "server:"):
+		bRule = strings.TrimPrefix(rule, "server:")
+		item.isServer = true
+	default:
+		bRule = rule
+		item.isTag = true
+	}
+	regex, err := regexp2.Compile(bRule, regexp2.RE2)
+	if err != nil {
+		return nil, E.Cause(err, "invalid rule: ", rule)
+	}
+	item.regex = regex
+	return &item, nil
+}
+
+func (i *FilterItem) match(outbound *option.Outbound, tagMap map[string]string) bool { // append ==> true
+	var s string
+	if i.isType {
+		s = outbound.Type
+	} else if i.isServer {
+		s = getServer(outbound)
+	} else {
+		if tagMap != nil {
+			s = tagMap[outbound.Tag]
+		} else {
+			s = outbound.Tag
+		}
+	}
+	b, err := i.regex.MatchString(s)
+	return err == nil && b
 }
