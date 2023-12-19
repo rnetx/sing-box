@@ -8,7 +8,6 @@ import (
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/urltest"
-	"github.com/sagernet/sing-box/outbound"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/rw"
 	"github.com/sagernet/sing/service"
@@ -172,7 +171,7 @@ func writeGroups(writer io.Writer, boxService *BoxService) error {
 		var group OutboundGroup
 		group.Tag = iGroup.Tag()
 		group.Type = iGroup.Type()
-		_, group.Selectable = iGroup.(*outbound.Selector)
+		_, group.Selectable = iGroup.(adapter.SelectableOutbound)
 		group.Selected = iGroup.Now()
 		if cacheFile != nil {
 			if isExpand, loaded := cacheFile.LoadGroupExpand(group.Tag); loaded {

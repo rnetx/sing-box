@@ -26,10 +26,10 @@ import (
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/outbound"
 	"github.com/sagernet/sing-box/transport/fakeip"
-	"github.com/sagernet/sing-dns"
+	dns "github.com/sagernet/sing-dns"
 	mux "github.com/sagernet/sing-mux"
-	"github.com/sagernet/sing-tun"
-	"github.com/sagernet/sing-vmess"
+	tun "github.com/sagernet/sing-tun"
+	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
@@ -55,6 +55,8 @@ type Router struct {
 	inboundByTag                       map[string]adapter.Inbound
 	outbounds                          []adapter.Outbound
 	outboundByTag                      map[string]adapter.Outbound
+	providerOutbounds                  []adapter.ProviderOutbound
+	providerOutboundByTag              map[string]adapter.ProviderOutbound
 	rules                              []adapter.Rule
 	defaultDetour                      string
 	defaultOutboundForConnection       adapter.Outbound
@@ -337,22 +339,39 @@ func (r *Router) Initialize(inbounds []adapter.Inbound, outbounds []adapter.Outb
 	for _, inbound := range inbounds {
 		inboundByTag[inbound.Tag()] = inbound
 	}
+	// Provider Outbound
+	var (
+		providerOutboundByTag map[string]adapter.ProviderOutbound
+		providerOutbounds     []adapter.ProviderOutbound
+	)
 	outboundByTag := make(map[string]adapter.Outbound)
 	for _, detour := range outbounds {
 		outboundByTag[detour.Tag()] = detour
+		providerOutbound, loaded := detour.(adapter.ProviderOutbound)
+		if loaded {
+			if providerOutboundByTag == nil {
+				providerOutboundByTag = make(map[string]adapter.ProviderOutbound)
+				providerOutbounds = make([]adapter.ProviderOutbound, 0, len(outbounds))
+			}
+			providerOutboundByTag[detour.Tag()] = providerOutbound
+			providerOutbounds = append(providerOutbounds, providerOutbound)
+		}
 	}
 	var defaultOutboundForConnection adapter.Outbound
 	var defaultOutboundForPacketConnection adapter.Outbound
 	if r.defaultDetour != "" {
-		detour, loaded := outboundByTag[r.defaultDetour]
-		if !loaded {
-			return E.New("default detour not found: ", r.defaultDetour)
-		}
-		if common.Contains(detour.Network(), N.NetworkTCP) {
-			defaultOutboundForConnection = detour
-		}
-		if common.Contains(detour.Network(), N.NetworkUDP) {
-			defaultOutboundForPacketConnection = detour
+		// Disable Provider Outbound Check
+		if !strings.HasPrefix(r.defaultDetour, "@") || len(r.providerOutbounds) == 0 {
+			detour, loaded := outboundByTag[r.defaultDetour]
+			if !loaded {
+				return E.New("default detour not found: ", r.defaultDetour)
+			}
+			if common.Contains(detour.Network(), N.NetworkTCP) {
+				defaultOutboundForConnection = detour
+			}
+			if common.Contains(detour.Network(), N.NetworkUDP) {
+				defaultOutboundForPacketConnection = detour
+			}
 		}
 	}
 	var index, packetIndex int
@@ -406,6 +425,8 @@ func (r *Router) Initialize(inbounds []adapter.Inbound, outbounds []adapter.Outb
 	r.defaultOutboundForConnection = defaultOutboundForConnection
 	r.defaultOutboundForPacketConnection = defaultOutboundForPacketConnection
 	r.outboundByTag = outboundByTag
+	r.providerOutbounds = providerOutbounds
+	r.providerOutboundByTag = providerOutboundByTag
 	for i, rule := range r.rules {
 		if _, loaded := outboundByTag[rule.Outbound()]; !loaded {
 			return E.New("outbound not found for rule[", i, "]: ", rule.Outbound())
@@ -415,7 +436,21 @@ func (r *Router) Initialize(inbounds []adapter.Inbound, outbounds []adapter.Outb
 }
 
 func (r *Router) Outbounds() []adapter.Outbound {
-	return r.outbounds
+	outbounds := r.outbounds
+	// Provider Outbound
+	for _, providerOutbound := range r.providerOutbounds {
+		outbounds = append(outbounds, providerOutbound.Outbounds()...)
+	}
+	return outbounds
+}
+
+func (r *Router) ProviderOutbounds() []adapter.ProviderOutbound {
+	return r.providerOutbounds
+}
+
+func (r *Router) ProviderOutbound(tag string) (adapter.ProviderOutbound, bool) {
+	outbound, loaded := r.providerOutboundByTag[tag]
+	return outbound, loaded
 }
 
 func (r *Router) PreStart() error {
@@ -686,6 +721,17 @@ func (r *Router) PostStart() error {
 }
 
 func (r *Router) Outbound(tag string) (adapter.Outbound, bool) {
+	if len(r.providerOutbounds) > 0 {
+		if strings.HasPrefix(tag, "@") {
+			tag = tag[1:]
+		}
+		for _, providerOutbound := range r.providerOutbounds {
+			outbound, loaded := providerOutbound.Outbound(tag)
+			if loaded {
+				return outbound, loaded
+			}
+		}
+	}
 	outbound, loaded := r.outboundByTag[tag]
 	return outbound, loaded
 }

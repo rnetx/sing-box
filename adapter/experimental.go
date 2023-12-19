@@ -38,6 +38,8 @@ type CacheFile interface {
 	StoreGroupExpand(group string, expand bool) error
 	LoadRuleSet(tag string) *SavedRuleSet
 	SaveRuleSet(tag string, set *SavedRuleSet) error
+	LoadProviderOutboundData(tag string) ([]byte, error)
+	StoreProviderOutboundData(tag string, data []byte) error
 }
 
 type SavedRuleSet struct {
@@ -127,4 +129,8 @@ type V2RayServer interface {
 type V2RayStatsService interface {
 	RoutedConnection(inbound string, outbound string, user string, conn net.Conn) net.Conn
 	RoutedPacketConnection(inbound string, outbound string, user string, conn N.PacketConn) N.PacketConn
+}
+
+type SelectableOutbound interface {
+	SelectOutbound(tag string) bool
 }

@@ -30,6 +30,10 @@ const (
 	TypeURLTest  = "urltest"
 )
 
+const (
+	TypeProvider = "provider"
+)
+
 func ProxyDisplayName(proxyType string) string {
 	switch proxyType {
 	case TypeDirect:
@@ -72,6 +76,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "Selector"
 	case TypeURLTest:
 		return "URLTest"
+	case TypeProvider:
+		return "Provider"
 	default:
 		return "Unknown"
 	}

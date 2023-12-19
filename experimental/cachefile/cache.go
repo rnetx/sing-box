@@ -19,16 +19,18 @@ import (
 )
 
 var (
-	bucketSelected = []byte("selected")
-	bucketExpand   = []byte("group_expand")
-	bucketMode     = []byte("clash_mode")
-	bucketRuleSet  = []byte("rule_set")
+	bucketSelected         = []byte("selected")
+	bucketExpand           = []byte("group_expand")
+	bucketMode             = []byte("clash_mode")
+	bucketRuleSet          = []byte("rule_set")
+	bucketProviderOutbound = []byte("provider_outbound")
 
 	bucketNameList = []string{
 		string(bucketSelected),
 		string(bucketExpand),
 		string(bucketMode),
 		string(bucketRuleSet),
+		string(bucketProviderOutbound),
 	}
 
 	cacheIDDefault = []byte("default")
@@ -290,5 +292,31 @@ func (c *CacheFile) SaveRuleSet(tag string, set *adapter.SavedRuleSet) error {
 			return err
 		}
 		return bucket.Put([]byte(tag), setBinary)
+	})
+}
+
+func (c *CacheFile) LoadProviderOutboundData(tag string) ([]byte, error) {
+	var data []byte
+	err := c.DB.View(func(t *bbolt.Tx) error {
+		bucket := c.bucket(t, bucketProviderOutbound)
+		if bucket == nil {
+			return nil
+		}
+		data = bucket.Get([]byte(tag))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (c *CacheFile) StoreProviderOutboundData(tag string, data []byte) error {
+	return c.DB.Batch(func(t *bbolt.Tx) error {
+		bucket, err := c.createBucket(t, bucketProviderOutbound)
+		if err != nil {
+			return err
+		}
+		return bucket.Put([]byte(tag), data)
 	})
 }

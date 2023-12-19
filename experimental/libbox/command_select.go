@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"net"
 
-	"github.com/sagernet/sing-box/outbound"
+	"github.com/sagernet/sing-box/adapter"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/rw"
 )
@@ -48,7 +48,7 @@ func (s *CommandServer) handleSelectOutbound(conn net.Conn) error {
 	if !isLoaded {
 		return writeError(conn, E.New("selector not found: ", groupTag))
 	}
-	selector, isSelector := outboundGroup.(*outbound.Selector)
+	selector, isSelector := outboundGroup.(adapter.SelectableOutbound)
 	if !isSelector {
 		return writeError(conn, E.New("outbound is not a selector: ", groupTag))
 	}
