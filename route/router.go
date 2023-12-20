@@ -759,6 +759,10 @@ func (r *Router) RuleSet(tag string) (adapter.RuleSet, bool) {
 	return ruleSet, loaded
 }
 
+func (r *Router) RuleSets() []adapter.RuleSet {
+	return r.ruleSets
+}
+
 func (r *Router) RouteConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
 	if r.pauseManager.IsDevicePaused() {
 		return E.New("reject connection to ", metadata.Destination, " while device paused")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/netip"
+	"time"
 
 	"github.com/sagernet/sing-box/common/geoip"
 	dns "github.com/sagernet/sing-dns"
@@ -35,6 +36,7 @@ type Router interface {
 	LoadGeosite(code string) (Rule, error)
 
 	RuleSet(tag string) (RuleSet, bool)
+	RuleSets() []RuleSet
 
 	Exchange(ctx context.Context, message *mdns.Msg) (*mdns.Msg, error)
 	Lookup(ctx context.Context, domain string, strategy dns.DomainStrategy) ([]netip.Addr, error)
@@ -90,6 +92,8 @@ type DNSRule interface {
 }
 
 type RuleSet interface {
+	Tag() string
+	Type() string
 	StartContext(ctx context.Context, startContext RuleSetStartContext) error
 	PostStart() error
 	Metadata() RuleSetMetadata
@@ -100,6 +104,9 @@ type RuleSet interface {
 type RuleSetMetadata struct {
 	ContainsProcessRule bool
 	ContainsWIFIRule    bool
+	RuleNum             int
+	LastUpdated         time.Time
+	Format              string
 }
 
 type RuleSetStartContext interface {
