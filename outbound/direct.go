@@ -2,6 +2,8 @@ package outbound
 
 import (
 	"context"
+	"math/big"
+	"math/rand"
 	"net"
 	"net/netip"
 	"time"
@@ -11,7 +13,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-dns"
+	dns "github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
@@ -30,6 +32,7 @@ type Direct struct {
 	fallbackDelay       time.Duration
 	overrideOption      int
 	overrideDestination M.Socksaddr
+	overrides           []option.DirectOutboundOverrideOptions
 	loopBack            *loopBackDetector
 }
 
@@ -65,6 +68,9 @@ func NewDirect(router adapter.Router, logger log.ContextLogger, tag string, opti
 	} else if options.OverridePort != 0 {
 		outbound.overrideOption = 3
 		outbound.overrideDestination = M.Socksaddr{Port: options.OverridePort}
+	} else if len(options.Override) > 0 {
+		outbound.overrideOption = 4
+		outbound.overrides = options.Override
 	}
 	return outbound, nil
 }
@@ -82,6 +88,17 @@ func (h *Direct) DialContext(ctx context.Context, network string, destination M.
 		destination = newDestination
 	case 3:
 		destination.Port = h.overrideDestination.Port
+	case 4:
+		address, port := h.randomAddr()
+		newDestination := destination
+		if address.IsValid() {
+			newDestination.Fqdn = ""
+			newDestination.Addr = address
+		}
+		if port != 0 {
+			newDestination.Port = port
+		}
+		destination = newDestination
 	}
 	network = N.NetworkName(network)
 	switch network {
@@ -102,7 +119,7 @@ func (h *Direct) DialParallel(ctx context.Context, network string, destination M
 	metadata.Outbound = h.tag
 	metadata.Destination = destination
 	switch h.overrideOption {
-	case 1, 2:
+	case 1, 2, 4:
 		// override address
 		return h.DialContext(ctx, network, destination)
 	case 3:
@@ -138,6 +155,17 @@ func (h *Direct) ListenPacket(ctx context.Context, destination M.Socksaddr) (net
 		destination = newDestination
 	case 3:
 		destination.Port = h.overrideDestination.Port
+	case 4:
+		address, port := h.randomAddr()
+		newDestination := destination
+		if address.IsValid() {
+			newDestination.Fqdn = ""
+			newDestination.Addr = address
+		}
+		if port != 0 {
+			newDestination.Port = port
+		}
+		destination = newDestination
 	}
 	if h.overrideOption == 0 {
 		h.logger.InfoContext(ctx, "outbound packet connection")
@@ -167,4 +195,24 @@ func (h *Direct) NewPacketConnection(ctx context.Context, conn N.PacketConn, met
 		return E.New("reject loopback packet connection to ", metadata.Destination)
 	}
 	return NewPacketConnection(ctx, h, conn, metadata)
+}
+
+func (h *Direct) randomAddr() (netip.Addr, uint16) {
+	options := h.overrides[rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(h.overrides))]
+	if !options.Address.IsValid() {
+		return netip.Addr{}, options.Port
+	}
+	startN := big.NewInt(0).SetBytes(options.Address.Addr().AsSlice())
+	var bits int
+	if options.Address.Addr().Is4() {
+		bits = 5
+	} else {
+		bits = 7
+	}
+	bt := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(1<<bits-int64(options.Address.Bits())), nil)
+	bt.Sub(bt, big.NewInt(2))
+	n := big.NewInt(0).Rand(rand.New(rand.NewSource(time.Now().UnixNano())), bt)
+	n.Add(n, startN)
+	newAddr, _ := netip.AddrFromSlice(n.Bytes())
+	return newAddr, options.Port
 }
