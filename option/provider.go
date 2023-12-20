@@ -11,6 +11,7 @@ type ProviderOutboundOptions struct {
 	RequestTimeout  Duration                        `json:"request_timeout"`
 	HTTP3           bool                            `json:"http3"`
 	UserAgent       string                          `json:"user_agent"`
+	HotReload       bool                            `json:"hot_reload"`
 	Actions         []ProviderOutboundActionOptions `json:"actions"`
 }
 

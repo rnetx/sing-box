@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,6 +74,7 @@ type Provider struct {
 	requestTimeout        time.Duration
 	userAgent             string
 	actions               []provider.Action
+	hotReload             bool
 	globalOutboundOptions option.Outbound
 	globalOutbound        adapter.Outbound
 	outbounds             []adapter.Outbound
@@ -85,6 +87,7 @@ type Provider struct {
 	loopCancel   context.CancelFunc
 	closeDone    chan struct{}
 	updateLock   sync.Mutex
+	restartLock  sync.RWMutex
 }
 
 type ProviderData struct {
@@ -109,6 +112,7 @@ func NewProvider(ctx context.Context, router adapter.Router, logFactory log.Fact
 		updateInterval: time.Duration(options.UpdateInterval),
 		requestTimeout: time.Duration(options.RequestTimeout),
 		userAgent:      options.UserAgent,
+		hotReload:      options.HotReload,
 		globalOutboundOptions: option.Outbound{
 			Tag:             tag,
 			Type:            C.TypeSelector,
@@ -167,9 +171,14 @@ func (p *Provider) preStart() error {
 	if len(outboundOptions) == 0 {
 		return E.New("missing outbounds")
 	}
+	return p.prepareOutbounds(outboundOptions)
+}
+
+func (p *Provider) prepareOutbounds(outboundOptions []option.Outbound) error {
 	p.outbounds = make([]adapter.Outbound, 0, len(outboundOptions))
 	outboundTags := make([]string, 0, len(outboundOptions))
 	p.outboundByTag = make(map[string]adapter.Outbound, len(outboundOptions))
+	var err error
 	for i, options := range outboundOptions {
 		var out adapter.Outbound
 		var tag string
@@ -209,10 +218,10 @@ func (p *Provider) preStart() error {
 	return nil
 }
 
-func (p *Provider) startOutbounds() error {
+func (p *Provider) startOutbounds(outs []adapter.Outbound) ([]adapter.Outbound, error) {
 	outboundTags := make(map[adapter.Outbound]string)
 	outbounds := make(map[string]adapter.Outbound)
-	for i, outboundToStart := range p.outbounds {
+	for i, outboundToStart := range outs {
 		var outboundTag string
 		if outboundToStart.Tag() == "" {
 			outboundTag = F.ToString(i)
@@ -220,16 +229,17 @@ func (p *Provider) startOutbounds() error {
 			outboundTag = outboundToStart.Tag()
 		}
 		if _, exists := outbounds[outboundTag]; exists {
-			return E.New("outbound tag ", outboundTag, " duplicated")
+			return nil, E.New("outbound tag ", outboundTag, " duplicated")
 		}
 		outboundTags[outboundToStart] = outboundTag
 		outbounds[outboundTag] = outboundToStart
 	}
 	started := make(map[string]bool)
+	startedOutbounds := make([]adapter.Outbound, 0, len(outs))
 	for {
 		canContinue := false
 	startOne:
-		for _, outboundToStart := range p.outbounds {
+		for _, outboundToStart := range outs {
 			outboundTag := outboundTags[outboundToStart]
 			if started[outboundTag] {
 				continue
@@ -245,17 +255,18 @@ func (p *Provider) startOutbounds() error {
 			if starter, isStarter := outboundToStart.(common.Starter); isStarter {
 				err := starter.Start()
 				if err != nil {
-					return E.Cause(err, "initialize outbound/", outboundToStart.Type(), "[", outboundTag, "]")
+					return nil, E.Cause(err, "initialize outbound/", outboundToStart.Type(), "[", outboundTag, "]")
 				}
+				startedOutbounds = append(startedOutbounds, outboundToStart)
 			}
 		}
-		if len(started) == len(p.outbounds) {
+		if len(started) == len(outs) {
 			break
 		}
 		if canContinue {
 			continue
 		}
-		currentOutbound := common.Find(p.outbounds, func(it adapter.Outbound) bool {
+		currentOutbound := common.Find(outs, func(it adapter.Outbound) bool {
 			return !started[outboundTags[it]]
 		})
 		var lintOutbound func(oTree []string, oCurrent adapter.Outbound) error
@@ -272,19 +283,31 @@ func (p *Provider) startOutbounds() error {
 			}
 			return lintOutbound(append(oTree, problemOutboundTag), problemOutbound)
 		}
-		return lintOutbound([]string{outboundTags[currentOutbound]}, currentOutbound)
+		return nil, lintOutbound([]string{outboundTags[currentOutbound]}, currentOutbound)
 	}
-	return nil
+	return startedOutbounds, nil
 }
 
 func (p *Provider) Start() error {
+	if p.hotReload {
+		p.restartLock.Lock()
+		defer p.restartLock.Unlock()
+	}
 	err := p.preStart()
 	if err != nil {
 		return err
 	}
-	err = p.startOutbounds()
+	_, err = p.startOutbounds(p.outbounds)
 	if err != nil {
 		return err
+	}
+	for i, out := range p.outbounds {
+		if lateOutbound, isLateOutbound := out.(adapter.PostStarter); isLateOutbound {
+			err := lateOutbound.PostStart()
+			if err != nil {
+				return E.Cause(err, "post-start outbound/", out.Type(), "[", i, "]")
+			}
+		}
 	}
 	starter, isStarter := p.globalOutbound.(common.Starter)
 	if isStarter {
@@ -308,6 +331,10 @@ func (p *Provider) Close() error {
 		<-p.closeDone
 		close(p.closeDone)
 	}
+	if p.hotReload {
+		p.restartLock.Lock()
+		defer p.restartLock.Unlock()
+	}
 	var errors error
 	errors = E.Append(errors, common.Close(p.globalOutbound), func(err error) error {
 		return E.Cause(err, "close global outbound")
@@ -321,28 +348,34 @@ func (p *Provider) Close() error {
 }
 
 func (p *Provider) PostStart() error {
-	for _, outbound := range p.outbounds {
+	outbounds := p.outbounds
+	for _, outbound := range outbounds {
 		if lateOutbound, isLateOutbound := outbound.(adapter.PostStarter); isLateOutbound {
 			err := lateOutbound.PostStart()
 			if err != nil {
-				return E.Cause(err, "post-start outbound/", outbound.Tag())
+				return E.Cause(err, "post-start outbound/", outbound.Type(), "[", outbound.Tag(), "]")
 			}
-		}
-	}
-	if lateOutbound, isLateOutbound := p.globalOutbound.(adapter.PostStarter); isLateOutbound {
-		err := lateOutbound.PostStart()
-		if err != nil {
-			return E.Cause(err, "post-start outbound/", p.globalOutbound.Tag())
 		}
 	}
 	return nil
 }
 
 func (p *Provider) InterfaceUpdated() {
-	if interfaceUpdated, isInterfaceUpdated := p.globalOutbound.(adapter.InterfaceUpdateListener); isInterfaceUpdated {
+	var globalOutbound adapter.Outbound
+	var outbounds []adapter.Outbound
+	if p.hotReload {
+		p.restartLock.RLock()
+		globalOutbound = p.globalOutbound
+		outbounds = p.outbounds
+		p.restartLock.RUnlock()
+	} else {
+		globalOutbound = p.globalOutbound
+		outbounds = p.outbounds
+	}
+	if interfaceUpdated, isInterfaceUpdated := globalOutbound.(adapter.InterfaceUpdateListener); isInterfaceUpdated {
 		interfaceUpdated.InterfaceUpdated()
 	}
-	for _, out := range p.outbounds {
+	for _, out := range outbounds {
 		if interfaceUpdated, isInterfaceUpdated := out.(adapter.InterfaceUpdateListener); isInterfaceUpdated {
 			interfaceUpdated.InterfaceUpdated()
 		}
@@ -354,15 +387,18 @@ func (p *Provider) Network() []string {
 }
 
 func (p *Provider) Now() string {
-	return p.globalOutbound.(*Selector).Now()
+	globalOutbound := p.globalOutbound
+	return globalOutbound.(*Selector).Now()
 }
 
 func (p *Provider) All() []string {
-	return p.globalOutbound.(*Selector).All()
+	globalOutbound := p.globalOutbound
+	return globalOutbound.(*Selector).All()
 }
 
 func (p *Provider) SelectOutbound(tag string) bool {
-	return p.globalOutbound.(*Selector).SelectOutbound(tag)
+	globalOutbound := p.globalOutbound
+	return globalOutbound.(*Selector).SelectOutbound(tag)
 }
 
 func (p *Provider) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
@@ -386,7 +422,8 @@ func (p *Provider) Outbounds() []adapter.Outbound {
 }
 
 func (p *Provider) Outbound(tag string) (adapter.Outbound, bool) {
-	outbound, loaded := p.outboundByTag[tag]
+	outboundByTag := p.outboundByTag
+	outbound, loaded := outboundByTag[tag]
 	return outbound, loaded
 }
 
@@ -408,7 +445,8 @@ func (p *Provider) HealthCheck(_ context.Context, url string) error {
 	}
 
 	b, _ := batch.New(ctx, batch.WithConcurrencyNum[any](32))
-	for _, outbound := range p.outbounds {
+	outbounds := p.outbounds
+	for _, outbound := range outbounds {
 		tag := outbound.Tag()
 		b.Go(tag, func() (any, error) {
 			t, err := urltest.URLTest(ctx, url, outbound)
@@ -578,7 +616,7 @@ func (p *Provider) storeProviderData(providerData ProviderData) error {
 
 func (p *Provider) update() {
 	p.initCacheFile()
-	if p.cacheFile != nil {
+	if p.cacheFile != nil || p.hotReload {
 		p.logger.Info("update provider data...")
 		defer p.logger.Info("update provider data done")
 		providerData, err := p.fetch(p.ctx)
@@ -587,10 +625,163 @@ func (p *Provider) update() {
 			return
 		}
 		p.providerInfo = providerData.Info
-		err = p.storeProviderData(providerData)
+		if p.cacheFile != nil {
+			err = p.storeProviderData(providerData)
+			if err != nil {
+				p.logger.Error("store provider data failed: ", err)
+				return
+			}
+		}
+		if p.hotReload {
+			set := provider.NewPreProcessSet(providerData.Outbounds, p.actions)
+			outbounds, err := set.Build()
+			if err != nil {
+				p.logger.Error("build outbounds failed: ", err)
+				return
+			}
+			err = p.restartOutbounds(outbounds)
+			if err != nil {
+				p.logger.Error("restart outbounds failed: ", err)
+			}
+			// GC
+			runtime.GC()
+		}
+	}
+}
+
+func (p *Provider) restartOutbounds(outboundOptions []option.Outbound) (err error) {
+	outbounds := make([]adapter.Outbound, 0, len(outboundOptions))
+	outboundTags := make([]string, 0, len(outboundOptions))
+	outboundByTag := make(map[string]adapter.Outbound, len(outboundOptions))
+	for i, options := range outboundOptions {
+		var out adapter.Outbound
+		var tag string
+		if options.Tag != "" {
+			tag = options.Tag
+		} else {
+			tag = F.ToString(i)
+		}
+		out, err = New(
+			p.ctx,
+			p.router,
+			p.logFactory,
+			p.logFactory.NewLogger(F.ToString("outbound/", options.Type, "[", tag, "]")),
+			tag,
+			options,
+		)
 		if err != nil {
-			p.logger.Error("store provider data failed: ", err)
+			err = E.Cause(err, "restart: parse new outbound[", i, "]")
+			return
+		}
+		defer func(out adapter.Outbound) {
+			if err != nil {
+				err := common.Close(out)
+				if err != nil {
+					p.logger.Warn("restart: close new outbound/", out.Type(), "[", out.Tag(), "] failed: ", err)
+				}
+			}
+		}(out)
+		p.outbounds = append(p.outbounds, out)
+		p.outboundByTag[tag] = out
+		outboundTags = append(outboundTags, tag)
+	}
+	p.globalOutboundOptions.SelectorOptions.Outbounds = outboundTags
+	var globalOutbound adapter.Outbound
+	globalOutbound, err = New(
+		p.ctx,
+		p.router,
+		p.logFactory,
+		p.logFactory.NewLogger(F.ToString("outbound/", p.globalOutboundOptions.Type, "[", p.globalOutboundOptions.Tag, "]")),
+		p.tag,
+		p.globalOutboundOptions,
+	)
+	if err != nil {
+		err = E.Cause(err, "restart: parse new global outbound")
+		return
+	}
+	defer func() {
+		if err != nil {
+			err := common.Close(p.globalOutbound)
+			if err != nil {
+				p.logger.Warn("restart: close new global outbound failed: ", err)
+			}
+		}
+	}()
+	// Start New Outbounds
+	var startedOutbounds []adapter.Outbound
+	startedOutbounds, err = p.startOutbounds(outbounds)
+	if err != nil {
+		err = E.Cause(err, "restart: start new outbounds")
+		for _, out := range startedOutbounds {
+			err := common.Close(out)
+			if err != nil {
+				p.logger.Warn("restart: close new outbound/", out.Type(), "[", out.Tag(), "] failed: ", err)
+			}
+		}
+		return
+	}
+	defer func() {
+		if err != nil {
+			for _, out := range startedOutbounds {
+				err := common.Close(out)
+				if err != nil {
+					p.logger.Warn("restart: close new outbound/", out.Type(), "[", out.Tag(), "] failed: ", err)
+				}
+			}
+		}
+	}()
+	starter, isStarter := globalOutbound.(common.Starter)
+	if isStarter {
+		err = starter.Start()
+		if err != nil {
+			err = E.Cause(err, "initialize new global outbound")
 			return
 		}
 	}
+	defer func() {
+		if err != nil {
+			err := common.Close(globalOutbound)
+			if err != nil {
+				p.logger.Warn("restart: close new global outbound failed: ", err)
+			}
+		}
+	}()
+	for _, out := range startedOutbounds {
+		if lateOutbound, isLateOutbound := out.(adapter.PostStarter); isLateOutbound {
+			err = lateOutbound.PostStart()
+			if err != nil {
+				err = E.Cause(err, "restart: post-start new outbound/", out.Type(), "[", out.Tag(), "]")
+				return
+			}
+			defer func(out adapter.Outbound) {
+				if err != nil {
+					err := common.Close(out)
+					if err != nil {
+						p.logger.Warn("restart: post-start new outbound/", out.Type(), "[", out.Tag(), "] failed: ", err)
+					}
+				}
+			}(out)
+		}
+	}
+	// Restart
+	p.restartLock.Lock()
+	oldOutbounds := p.outbounds
+	oldGlobalOutbound := p.globalOutbound
+	p.outbounds = outbounds
+	p.outboundByTag = outboundByTag
+	p.globalOutbound = globalOutbound
+	p.restartLock.Unlock()
+	// Close Old Outbounds
+	err = common.Close(oldGlobalOutbound)
+	if err != nil {
+		p.logger.Warn("restart: close old global outbound failed: ", err)
+	}
+	err = nil
+	for _, out := range oldOutbounds {
+		err := common.Close(out)
+		if err != nil {
+			p.logger.Warn("restart: close old outbound/", out.Type(), "[", out.Tag(), "] failed: ", err)
+		}
+	}
+	return nil
 }
