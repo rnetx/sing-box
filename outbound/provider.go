@@ -383,7 +383,11 @@ func (p *Provider) InterfaceUpdated() {
 }
 
 func (p *Provider) Network() []string {
-	return p.globalOutbound.Network()
+	globalOutbound := p.globalOutbound
+	if globalOutbound == nil {
+		return []string{N.NetworkTCP, N.NetworkUDP}
+	}
+	return globalOutbound.Network()
 }
 
 func (p *Provider) Now() string {
