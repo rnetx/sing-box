@@ -80,7 +80,7 @@ type Provider struct {
 
 	httpClient   *http.Client
 	cacheFile    adapter.CacheFile
-	providerData ProviderData
+	providerInfo adapter.ProviderInfo
 	loopCtx      context.Context
 	loopCancel   context.CancelFunc
 	closeDone    chan struct{}
@@ -282,7 +282,6 @@ func (p *Provider) Start() error {
 	if err != nil {
 		return err
 	}
-	p.providerData.Outbounds = nil
 	err = p.startOutbounds()
 	if err != nil {
 		return err
@@ -435,7 +434,7 @@ func (p *Provider) HealthCheck(_ context.Context, url string) error {
 }
 
 func (p *Provider) ProviderInfo() adapter.ProviderInfo {
-	return p.providerData.Info
+	return p.providerInfo
 }
 
 func (p *Provider) loopUpdate() {
@@ -487,7 +486,7 @@ func (p *Provider) initOutbounds() ([]option.Outbound, error) {
 			}
 		}
 	}
-	p.providerData = providerData
+	p.providerInfo = providerData.Info
 	set := provider.NewPreProcessSet(providerData.Outbounds, p.actions)
 	return set.Build()
 }
@@ -587,7 +586,7 @@ func (p *Provider) update() {
 			p.logger.Error("fetch provider data failed: ", err)
 			return
 		}
-		p.providerData.Info = providerData.Info
+		p.providerInfo = providerData.Info
 		err = p.storeProviderData(providerData)
 		if err != nil {
 			p.logger.Error("store provider data failed: ", err)
