@@ -64,6 +64,8 @@ func proxyInfo(server *Server, detour adapter.Outbound) *badjson.JSONObject {
 	switch detour.Type() {
 	case C.TypeBlock:
 		clashType = "Reject"
+	case C.TypeProvider:
+                clashType = "Selector"
 	default:
 		clashType = C.ProxyDisplayName(detour.Type())
 	}
